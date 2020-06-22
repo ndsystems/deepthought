@@ -1,11 +1,10 @@
 "handler for hardware abstraction layer"
-import zerorpc
+from comms import get_object
 
 
 class Control:
     def __init__(self):
-        self.mmc = zerorpc.Client()
-        self.mmc.connect("tcp://127.0.0.1:12345")
+        self.mmc = get_object("tcp://127.0.0.1:12345")
 
     def set_channel(self, channel_label):
         self.mmc.setConfig("channel", channel_label)

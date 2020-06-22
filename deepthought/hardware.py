@@ -2,8 +2,8 @@
 import os
 import logging
 from configs import get_default
+from comms import serve_object
 
-import zerorpc
 import pymmcore
 from events import PyMMEventCallBack
 
@@ -71,8 +71,7 @@ if __name__ == "__main__":
 
     mmc = load_microscope(config_file)
 
-    server = zerorpc.Server(mmc)
-    server.bind(f"tcp://{hostname}:{port}")
+    server = serve_object(mmc, f"tcp://{hostname}:{port}")
 
     try:
         server.run()
