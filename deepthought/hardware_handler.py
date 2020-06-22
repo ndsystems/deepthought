@@ -97,6 +97,19 @@ class Scope(BaseScope):
 
 
 class ImagingScope(Scope):
+    def __init__(self):
+        super().__init__()
+        self.camera = "Camera"
+
+    @property
+    def camera(self):
+        return self.__camera
+
+    @camera.setter
+    def camera(self, label):
+        self.mmc.setCameraDevice(label)
+        self.__camera = label
+
     # @visualize
     def image(self):
         self.mmc.snapImage()
