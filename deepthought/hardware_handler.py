@@ -2,14 +2,37 @@
 from comms import get_object, serve_object
 
 
-class Default:
+class BaseScope:
+    # safety thresholds
     exposure_lower = 0.01  # ms
     exposure_higher = 2000  # ms
 
+    z_higher = 5000
 
-class Scope(Default):
+    mmc = get_object("tcp://127.0.0.1:12345")
+
+    def device_properties(self, device):
+        """get property names and values for the given device"""
+        property_names = self.mmc.getDevicePropertyNames(device)
+        device_props = {}
+        for property_name in property_names:
+            value = self.mmc.getProperty(device, property_name)
+            device_props[property_name] = value
+        return device_props
+
+    def properties(self):
+        """get property names and values for all loaded devices in scope"""
+        list_of_devices = self.mmc.getLoadedDevices()
+        all_device_props = {}
+
+        for device in list_of_devices:
+            device_props = self.device_properties(device)
+            all_device_props[device] = device_props
+        return all_device_props
+
+
+class Scope(BaseScope):
     def __init__(self):
-        self.mmc = get_object("tcp://127.0.0.1:12345")
         self.exposure = 10
         self.xy = [0, 0]
         self.z = 0
@@ -31,6 +54,7 @@ class Scope(Default):
 
     @objective.setter
     def objective(self, label):
+        # escape the objective lens here, if not done by MMCore
         self.mmc.setConfig("Objective", label)
         self.__objective = label
 
@@ -55,6 +79,7 @@ class Scope(Default):
 
     @xy.setter
     def xy(self, value):
+        # stage limits here
         self.mmc.setXYPosition(*value)
         self.__xy = value
 
@@ -64,31 +89,20 @@ class Scope(Default):
 
     @z.setter
     def z(self, value):
+        if value >= self.z_higher:
+            raise ValueError("Z higher limit reached")
+
         self.mmc.setPosition(value)
         self.__z = value
 
+
+class ImagingScope(Scope):
     # @visualize
-    def get_image(self):
+    def image(self):
         self.mmc.snapImage()
         img = self.mmc.getImage()
         return img
 
-    def get_all_properties(self):
-        list_of_devices = self.mmc.getLoadedDevices()
-        all_device_props = {}
-
-        for device in list_of_devices:
-            list_of_properties = self.mmc.getDevicePropertyNames(device)
-
-            device_props = {}
-            for property_ in list_of_properties:
-                value = self.mmc.getProperty(device, property_)
-                device_props[property_] = value
-
-            all_device_props[device] = device_props
-        return all_device_props
-
 
 if __name__ == "__main__":
-    scope = Scope()
-    serve_object(scope, "tcp://127.0.0.1:12346")
+    scope = ImagingScope()
