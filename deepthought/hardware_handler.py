@@ -1,36 +1,71 @@
 "handler for hardware abstraction layer"
-from comms import get_object
+from comms import get_object, serve_object
 
 
-class Control:
+class Default:
+    exposure_lower = 0.01  # ms
+    exposure_higher = 2000  # ms
+
+
+class Scope(Default):
     def __init__(self):
         self.mmc = get_object("tcp://127.0.0.1:12345")
+        self.exposure = 10
+        self.xy = [0, 0]
+        self.z = 0
+        self.channel = "FITC"
+        self.objective = "10X"
 
-    def set_channel(self, channel_label):
-        self.mmc.setConfig("channel", channel_label)
-        return channel_label
+    @property
+    def channel(self):
+        return self.__channel
 
-    def set_objective(self, objective_label):
-        self.mmc.setConfig("objective", objective_label)
-        return objective_label
+    @channel.setter
+    def channel(self, label):
+        self.mmc.setConfig("Channel", label)
+        self.__channel = label
 
-    def set_exposure(self, exposure):
-        self.mmc.setExposure(exposure)
-        return self.get_exposure()
+    @property
+    def objective(self):
+        return self.__objective
 
-    def get_exposure(self):
-        return self.mmc.getExposure()
+    @objective.setter
+    def objective(self, label):
+        self.mmc.setConfig("Objective", label)
+        self.__objective = label
 
-    def set_xyz(self, xyz):
-        x, y, z = xyz
-        self.mmc.setXYPosition(x, y)
-        self.mmc.setPosition(z)
-        return self.get_xyz()
+    @property
+    def exposure(self):
+        return self.__exposure
 
-    def get_xyz(self):
-        x, y = self.mmc.getXYPosition()
-        z = self.mmc.getPosition()
-        return (x, y, z)
+    @exposure.setter
+    def exposure(self, value):
+        if value < self.exposure_lower:
+            value = self.exposure_lower
+
+        elif value > self.exposure_higher:
+            value = self.exposure_higher
+
+        self.mmc.setExposure(value)
+        self.__exposure = value
+
+    @property
+    def xy(self):
+        return self.__xy
+
+    @xy.setter
+    def xy(self, value):
+        self.mmc.setXYPosition(*value)
+        self.__xy = value
+
+    @property
+    def z(self):
+        return self.__z
+
+    @z.setter
+    def z(self, value):
+        self.mmc.setPosition(value)
+        self.__z = value
 
     # @visualize
     def get_image(self):
@@ -55,4 +90,5 @@ class Control:
 
 
 if __name__ == "__main__":
-    scope = Control()
+    scope = Scope()
+    serve_object(scope, "tcp://127.0.0.1:12346")

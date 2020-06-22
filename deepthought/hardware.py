@@ -5,7 +5,6 @@ from configs import get_default
 from comms import serve_object
 
 import pymmcore
-from events import PyMMEventCallBack
 
 from skimage import io
 import numpy as np
@@ -41,8 +40,6 @@ def load_microscope(config_path):
 
     os.chdir(working_dir)
 
-    # mm_event_callback = PyMMEventCallBack()
-    # mmc.registerCallback(mm_event_callback)
     return mmc
 
 
