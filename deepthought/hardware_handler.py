@@ -48,7 +48,6 @@ class DefaultScope(BaseScope):
 
 class Scope(DefaultScope):
     def __init__(self):
-        self.exposure = 10
         self.xy = [0, 0]
         self.z = 0
         self.channel = "FITC"
@@ -84,21 +83,6 @@ class Scope(DefaultScope):
         self.__objective = label
 
     @property
-    def exposure(self):
-        return self.__exposure
-
-    @exposure.setter
-    def exposure(self, value):
-        if value < self.exposure_lower:
-            value = self.exposure_lower
-
-        elif value > self.exposure_higher:
-            value = self.exposure_higher
-
-        self.mmc.setExposure(value)
-        self.__exposure = value
-
-    @property
     def xy(self):
         return self.__xy
 
@@ -124,6 +108,7 @@ class Scope(DefaultScope):
 class BaseImaging(DefaultScope):
     def __init__(self):
         self.camera = "left_port"
+        self.exposure = 10
         super(BaseImaging, self).__init__()
 
     @property
@@ -134,6 +119,21 @@ class BaseImaging(DefaultScope):
     def camera(self, label):
         self.mmc.setCameraDevice(label)
         self.__camera = label
+
+    @property
+    def exposure(self):
+        return self.__exposure
+
+    @exposure.setter
+    def exposure(self, value):
+        if value < self.exposure_lower:
+            value = self.exposure_lower
+
+        elif value > self.exposure_higher:
+            value = self.exposure_higher
+
+        self.mmc.setExposure(value)
+        self.__exposure = value
 
     # @visualize
     def image(self):
