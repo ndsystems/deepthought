@@ -149,17 +149,17 @@ class pE4000(DefaultScope):
 
     def set_led(self, value):
         led_channels = {
-            "ChannelA": [365, 385, 405, 435],
-            "ChannelB": [460, 470, 490, 500],
-            "ChannelC": [525, 550, 580, 595],
-            "ChannelD": [635, 660, 740, 770],
+            "A": [365, 385, 405, 435],
+            "B": [460, 470, 490, 500],
+            "C": [525, 550, 580, 595],
+            "D": [635, 660, 740, 770],
         }
 
         for channel, led_set in led_channels.items():
             if value in led_set:
                 self.__current_led = value
-                self.__channel = channel
-                self.__intensity_label = "Intensity" + channel[-1]
+                self.__channel = "Channel" + channel
+                self.__intensity_label = "Intensity" + channel
 
         self.mmc.setProperty("pE4000", self.__channel, self.__current_led)
         return self.__current_led
@@ -204,3 +204,14 @@ class Acqusition(Scope, BaseImaging, Illumination):
 
 if __name__ == "__main__":
     scope = Acqusition()
+
+    # example usage
+    params = {
+        "exposure": 30,
+        "xy": [100, -200],
+        "z": 100,
+        "channel": "FITC"
+    }
+
+    apply_settings(scope, params)
+    img = scope.image()
