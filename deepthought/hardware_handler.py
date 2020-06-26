@@ -61,7 +61,7 @@ class Scope(DefaultScope):
 
     @channel.setter
     def channel(self, label):
-        self.mmc.setConfig("Channel", label)
+        self.mmc.setConfig("channel", label)
         self.__channel = label
 
     @property
@@ -79,7 +79,7 @@ class Scope(DefaultScope):
     @objective.setter
     def objective(self, label):
         # escape the objective lens here, if not done by MMCore
-        self.mmc.setConfig("Objective", label)
+        self.mmc.setConfig("objective", label)
         self.__objective = label
 
     @property
@@ -101,7 +101,7 @@ class Scope(DefaultScope):
         if value >= self.z_higher:
             raise ValueError("Z higher limit reached")
 
-        self.mmc.setPosition(value)
+        self.mmc.setPosition(float(value))
         self.__z = value
 
 
