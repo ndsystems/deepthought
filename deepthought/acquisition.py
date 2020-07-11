@@ -2,67 +2,95 @@ from hardware_handler import Acqusition
 import numpy as np
 
 
-class Scan():
-    """This uses the idea of yielding to perform tasks sequentially, when sequences of
-    hardware tasks would have to be performed by the user before acquiring each image.
 
+class SingleScan:
+    def __init__(self, list_):
+        self.list_ = list_
+        self.gen = self.create_generator()
 
-    Example use case: for each position in xy, and for a defined z region, check focus,
-    adjust exposure, and take an image in a list of channels.
+    def create_generator(self):
+        yield from self.list_
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self.gen)
+           
+
+class RecursiveScan(SingleScan):
+    def __iter__(self):
+        return self
+        
+    def __next__(self):
+        try:
+            return next(self.gen)
+        except StopIteration:
+            self.gen = self.create_generator()
+            raise StopIteration()
+
+class XYScan():
+    def __init__(self, pos_list):
+        self.pos_list = pos_list
+
+    def __getitem__(self, index):
+        print("moving stage position to ", next(self.pos_list))
     
-    asyncio tasks might be a better way of doing this than yield statements
-    """
+    def __repr__(self):
+        return "XY"
 
-    # stores a list of generators that will be run in sequence till each task is complete.
 
-    task = []
+class ZScan():
+    def __init__(self, pos_list):
+        self.pos_list = pos_list
 
-    def __init__(self):
-        pass
-
-    def z_scan(self, *args):
-        self.task.append(self.__z_scan(*args))
-
-    def __z_scan(self, start, stop, step):
-        z_list =  np.arange(start, stop+step, step)
-        for z in z_list:
-            print("moving to z :", z)
-            yield self.__z(z)
-
-    def __z(self, z):
-        yield z #self.z = pos
+    def __getitem__(self, index):
+        print("moving Z position to ", next(self.pos_list))
     
-    def xy_scan(self, *args):
-        self.task.append(self.__xy_scan(*args))
+    def __repr__(self):
+        return "Z"
 
-    def __xy_scan(self, xy_list):
-        for xy in xy_list:
-            print("moving to xy :", xy)
-            yield self.__xy(xy)    
 
-    def __xy(self, xy):
-        yield xy #self.xy = xy
+class TScan():
+    def __getitem__(self, index):
+        # move things here
+        print("Time point", next(self.time_list))
+
+    def __repr__(self):
+        return "T"
+
+class MultiScan:
+    tasks = []
+    root = 1
+
+    def xy_scan(self, list_):
+        if self.root:
+            scan_obj = XYScan(SingleScan(list_))
+            self.root = 0
+        else:
+            scan_obj = XYScan(RecursiveScan(list_))
+
+        self.tasks.append(scan_obj)
+
+    def z_scan(self, list_):
+        if self.root:
+            scan_obj = ZScan(SingleScan(list_))
+            self.root = 0
+        else:
+            scan_obj = ZScan(RecursiveScan(list_))
+
+        self.tasks.append(scan_obj)
 
     def run(self):
-        # does not work as required
-        print("Running")
-        while True:
-            if len(self.task) == 0:
-                break
-
-            for count, _ in enumerate(self.task):
-                try:
-                    print(count)
-                    next(_)
-                except StopIteration:
-                    self.task.remove(_)
-
-        print("Finished Run")
+        for _ in self.tasks[0]:
+            for _ in self.tasks[1]:
+                time.sleep(1)
+    
 
 if __name__ == "__main__":
-    s = Scan()
-    xy_list = [(100, 100), (1,1)]
+    import time
+    s = MultiScan()
+    xy_list = [(100, 100), (1,1), (100, 1232)]
+    s.z_scan([0, 100, 10])
     s.xy_scan(xy_list)
-    s.z_scan(0, 100, 10)
-    # s.image()
-    # s.run()
+    
