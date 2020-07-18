@@ -3,36 +3,6 @@ import itertools
 import numpy as np
 
 
-
-class SingleScan:
-    # returns a generator object
-    def __init__(self, list_):
-        self.list_ = list_
-        self.gen = self.create_generator()
-
-    def create_generator(self):
-        yield from self.list_
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return next(self.gen)
-           
-
-class RecursiveScan(SingleScan):
-    def __iter__(self):
-        return self
-        
-    def __next__(self):
-        try:
-            return next(self.gen)
-        except StopIteration:
-            self.gen = self.create_generator()
-            raise StopIteration()
-
-
-
 class ImageSeries:
     def __init__(self):
         self.tasks = []
