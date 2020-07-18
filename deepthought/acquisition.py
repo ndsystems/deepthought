@@ -61,13 +61,13 @@ class ImageSeries:
         self._exp_task = lambda: (self.exp(e) for e in exposures)
         self.tasks.append(self._exp_task)
 
-    def run(self):
-        for generator_0 in self.tasks[0]():
-            next(generator_0)
-            for generator_1 in self.tasks[1]():
-                next(generator_1)
-                for generator_2 in self.tasks[2]():
-                    next(generator_2)
+    def run(self, n):
+        for generator in self.tasks[n]():
+            next(generator)
+            m=n+1
+            if m < len(self.tasks):
+                self.run(m)
+
 
     def __repr__(self):
         return str(self.self.tasks)
@@ -76,7 +76,7 @@ class ImageSeries:
 if __name__ == "__main__":
     s = ImageSeries()
     positions = [[0, 0], [100, 100], [1000, 1000]]
+    s.z_scan([0, 100, 1000, 10000])
     s.xy_scan(positions)
     s.exp_scan([50, 100, 150])
-    s.z_scan([0, 100, 1000, 10000])
-    s.run()
+    s.run(0)
