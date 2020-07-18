@@ -1,9 +1,11 @@
 from hardware_handler import Acqusition
+import itertools
 import numpy as np
 
 
 
 class SingleScan:
+    # returns a generator object
     def __init__(self, list_):
         self.list_ = list_
         self.gen = self.create_generator()
@@ -29,68 +31,52 @@ class RecursiveScan(SingleScan):
             self.gen = self.create_generator()
             raise StopIteration()
 
-class XYScan():
-    def __init__(self, pos_list):
-        self.pos_list = pos_list
 
-    def __getitem__(self, index):
-        print("moving stage position to ", next(self.pos_list))
+
+class ImageSeries:
+    def __init__(self):
+        self.tasks = []
+
+    def xy(self, position):
+        print(f"xy: {position}")
+        yield "xy"
+
+    def z(self, position):
+        print(f"z: {position}")
+        yield "z"
+
+    def exp(self, exposure):
+        print(f"exp: {exposure}")
+        yield "exposure"
+
+    def xy_scan(self, positions):
+        self._xy_task = lambda: (self.xy(pos) for pos in positions)
+        self.tasks.append(self._xy_task)
     
-    def __repr__(self):
-        return "XY"
+    def z_scan(self, positions):
+        self._z_task = lambda: (self.z(pos) for pos in positions)
+        self.tasks.append(self._z_task)
 
-
-class ZScan():
-    def __init__(self, pos_list):
-        self.pos_list = pos_list
-
-    def __getitem__(self, index):
-        print("moving Z position to ", next(self.pos_list))
-    
-    def __repr__(self):
-        return "Z"
-
-
-class TScan():
-    def __getitem__(self, index):
-        # move things here
-        print("Time point", next(self.time_list))
-
-    def __repr__(self):
-        return "T"
-
-class MultiScan:
-    tasks = []
-    root = 1
-
-    def xy_scan(self, list_):
-        if self.root:
-            scan_obj = XYScan(SingleScan(list_))
-            self.root = 0
-        else:
-            scan_obj = XYScan(RecursiveScan(list_))
-
-        self.tasks.append(scan_obj)
-
-    def z_scan(self, list_):
-        if self.root:
-            scan_obj = ZScan(SingleScan(list_))
-            self.root = 0
-        else:
-            scan_obj = ZScan(RecursiveScan(list_))
-
-        self.tasks.append(scan_obj)
+    def exp_scan(self, exposures):
+        self._exp_task = lambda: (self.exp(e) for e in exposures)
+        self.tasks.append(self._exp_task)
 
     def run(self):
-        for _ in self.tasks[0]:
-            for _ in self.tasks[1]:
-                time.sleep(1)
-    
+        for generator_0 in self.tasks[0]():
+            next(generator_0)
+            for generator_1 in self.tasks[1]():
+                next(generator_1)
+                for generator_2 in self.tasks[2]():
+                    next(generator_2)
+
+    def __repr__(self):
+        return str(self.self.tasks)
+
 
 if __name__ == "__main__":
-    import time
-    s = MultiScan()
-    xy_list = [(100, 100), (1,1), (100, 1232)]
-    s.z_scan([0, 100, 10])
-    s.xy_scan(xy_list)
-    
+    s = ImageSeries()
+    positions = [[0, 0], [100, 100], [1000, 1000]]
+    s.xy_scan(positions)
+    s.exp_scan([50, 100, 150])
+    s.z_scan([0, 100, 1000, 10000])
+    s.run()
