@@ -99,7 +99,7 @@ class Scope(DefaultScope):
     @z.setter
     def z(self, value):
         if value >= self.z_higher:
-            raise ValueError("Z higher limit reached")
+            raise ValueError(f"Z higher limit reached : {value}")
 
         self.mmc.setPosition(float(value))
         self.__z = value
