@@ -1,16 +1,14 @@
 "handler for hardware abstraction layer"
 
-from comms import get_object, serve_object
+from comms import get_object
 from configs import get_default
 
 default = get_default()
 
-hostname = default["mcu_server"]["hostname"]
-port = int(default["mcu_server"]["port"])
-
+addr = default["server"]["mcu"]
 
 class BaseScope:
-    mmc = get_object(f"tcp://{hostname}:{port}")
+    mmc = get_object(addr)
 
     def device_properties(self, device):
         """get property names and values for the given device"""

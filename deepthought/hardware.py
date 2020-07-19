@@ -1,8 +1,7 @@
 """MMCore hardware abstraction layer access as RPC"""
+from comms import share_object
 import os
-import logging
 from configs import get_default
-from comms import serve_object
 
 import pymmcore
 
@@ -58,17 +57,11 @@ def get_simulated_image():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format='%(asctime)s - %(message)s',
-                        level=logging.DEBUG)
-
     config_file = default["mm"]["cfg_file"]
-
-    hostname = default["mcu_server"]["hostname"]
-    port = int(default["mcu_server"]["port"])
-
     mmc = load_microscope(config_file)
 
-    server = serve_object(mmc, f"tcp://{hostname}:{port}")
+    addr = default["server"]["mcu"]
+    server = share_object(mmc, addr)
 
     try:
         server.run()

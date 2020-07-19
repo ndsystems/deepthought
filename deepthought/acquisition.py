@@ -1,5 +1,12 @@
+from comms import get_object
 from hardware_handler import Scope, BaseImaging, Illumination
 import numpy as np
+from configs import get_default
+
+default = get_default()
+
+viz_addr = default["server"]["viz"]
+
 
 class Acqusition(Scope, BaseImaging):
     pass
@@ -102,7 +109,9 @@ if __name__ == "__main__":
     s = ImageSeries()
     positions = [[0, 0], [100, 100], [1000, 1000]]
     s.xy_scan(positions)
-    s.z_scan([0, 100, 1000, 1500])
-    s.exp_scan([50, 100, 150])
+    s.z_scan([0, 100, 1000])
+    # s.exp_scan([50, 100, 150])
     s.image()
-    # s.run()
+    s.run()
+    v = get_object(viz_addr)
+    # v.add_images(s.images)
