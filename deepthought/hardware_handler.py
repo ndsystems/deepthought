@@ -51,7 +51,7 @@ class Scope(DefaultScope):
         self.xy = [0, 0]
         self.z = 0
         self.channel = "FITC"
-        self.objective = "10"
+        self.objective = "10X"
         self.shutter = "auto"
         super(Scope, self).__init__()
 
@@ -61,7 +61,7 @@ class Scope(DefaultScope):
 
     @channel.setter
     def channel(self, label):
-        self.mmc.setConfig("channel", label)
+        self.mmc.setConfig("Channel", label)
         self.__channel = label
 
     @property
@@ -79,7 +79,7 @@ class Scope(DefaultScope):
     @objective.setter
     def objective(self, label):
         # escape the objective lens here, if not done by MMCore
-        self.mmc.setConfig("objective", label)
+        self.mmc.setConfig("Objective", label)
         self.__objective = label
 
     @property
@@ -107,7 +107,7 @@ class Scope(DefaultScope):
 
 class BaseImaging(DefaultScope):
     def __init__(self):
-        self.camera = "left_port"
+        self.camera = "Camera"
         self.exposure = 10
         super(BaseImaging, self).__init__()
 
@@ -198,20 +198,20 @@ def apply_settings(scope, settings):
         setattr(scope, key, value)
 
 
-class Acqusition(Scope, BaseImaging, Illumination):
-    pass
+
 
 
 if __name__ == "__main__":
-    scope = Acqusition()
+    # scope = BaseImaging()
 
-    # example usage
-    params = {
-        "exposure": 30,
-        "xy": [100, -200],
-        "z": 100,
-        "channel": "FITC"
-    }
+    # # example usage
+    # params = {
+    #     "exposure": 30,
+    #     "xy": [100, -200],
+    #     "z": 100,
+    #     "channel": "FITC"
+    # }
 
-    apply_settings(scope, params)
-    img = scope.image()
+    # apply_settings(scope, params)
+    # img = scope.image()
+    pass
