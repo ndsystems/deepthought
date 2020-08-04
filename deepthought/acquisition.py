@@ -1,18 +1,14 @@
+import asyncio
 from comms import get_object
 from hardware_handler import Scope, BaseImaging, Illumination
 import numpy as np
-from configs import get_default
-
-default = get_default()
-
-viz_addr = default["server"]["viz"]
 
 
 class Acqusition(Scope, BaseImaging):
     pass
 
 
-class ImageSeries:
+class Sequential:
     """To orchestrate an image series by calling methods sequentially.
     
     These methods can invoke different higher order tasks, such as scanning a
@@ -27,30 +23,30 @@ class ImageSeries:
         self.tasks = [] # list of task method calls
         self.images = [] # images are appended to this -> np.array
         self.shapes = [] # keeps track of the shape of individual tasks
-        self.scope = Acqusition() # gives access to hardware functionality
+        self.device_control = Acqusition() # gives access to hardware functionality
 
     def xy(self, xy_position):
         """A generator that moves the stage to a XY position"""
         print(f"xy: {xy_position}")
-        self.scope.xy = xy_position 
+        self.device_control.xy = xy_position
         yield
 
     def z(self, z_position):
         """A generator that moves the stage to a Z position"""
         print(f"z: {z_position}")
-        self.scope.z = z_position 
+        self.device_control.z = z_position 
         yield
 
     def exp(self, exposure_time):
         """A generator that sets current exposure time"""
         print(f"exp: {exposure_time}")
-        self.scope.exposure = exposure_time
+        self.device_control.exposure = exposure_time
         yield
 
     def _image(self):
         """A generator that captures an image with current settings"""
         print("imaging")
-        image = self.scope.image()
+        image = self.device_control.image()
         self.images.append(image)
         yield 
 
@@ -77,7 +73,7 @@ class ImageSeries:
         self.image_ = lambda: (self._image() for _ in [None])
         self.tasks.append(self.image_)
 
-    def run_tasks(self, n):
+    def run_tasks(self, n=0):
         """Run recursively a list of tasks, which are generator expressions,
         generating individual generators
         
@@ -85,6 +81,7 @@ class ImageSeries:
         """
         for generator in self.tasks[n]():
             next(generator)
+            self.device_control.wait_for_device()
             m=n+1
             if m < len(self.tasks):
                 self.run_tasks(m)
@@ -95,7 +92,7 @@ class ImageSeries:
         2. Repacks the images into a numpy array
         3. Reshapes the array into the same dimensions as that of the tasks.
         """
-        self.run_tasks(0)
+        self.run_tasks()
         self.images = np.array(self.images)
         self.shapes.extend(self.images.shape[-2:])
 
@@ -106,12 +103,9 @@ class ImageSeries:
 
 
 if __name__ == "__main__":
-    s = ImageSeries()
+    s = Sequential()
     positions = [[0, 0], [100, 100], [1000, 1000]]
     s.xy_scan(positions)
-    s.z_scan([0, 100, 1000])
-    # s.exp_scan([50, 100, 150])
+    s.exp_scan([50, 100])
+    s.z_scan([0, 100])
     s.image()
-    s.run()
-    v = get_object(viz_addr)
-    # v.add_images(s.images)
