@@ -8,7 +8,26 @@ class Acqusition(Scope, BaseImaging):
     pass
 
 
-class Sequential:
+class Tasking:
+    task_tree = [] # list of task method calls
+
+    def run_tasks(self, task_index=0):
+        """Run recursively a list of tasks, which are generator expressions,
+        generating individual generators
+        
+        This is an equivalent of nested for-loops.
+        """
+        for generator in self.task_tree[task_index]():
+            next(generator)
+            # self.device_control.wait_for_device()
+            
+            next_index = task_index + 1
+            if next_index < len(self.task_tree):
+                self.run_tasks(next_index)
+
+
+
+class Sequential(Tasking):
     """To orchestrate an image series by calling methods sequentially.
     
     These methods can invoke different higher order tasks, such as scanning a
@@ -19,11 +38,9 @@ class Sequential:
     
     """
 
-    def __init__(self):
-        self.tasks = [] # list of task method calls
-        self.images = [] # images are appended to this -> np.array
-        self.shapes = [] # keeps track of the shape of individual tasks
-        self.device_control = Acqusition() # gives access to hardware functionality
+    images = [] # images are appended to this -> np.array
+    shapes = [] # keeps track of the shape of individual task tree
+    device_control = Acqusition() # gives access to hardware functionality
 
     def xy(self, xy_position):
         """A generator that moves the stage to a XY position"""
@@ -46,15 +63,14 @@ class Sequential:
     def _image(self):
         """A generator that captures an image with current settings"""
         print("imaging")
-        image = self.device_control.image()
-        self.images.append(image)
-        yield 
+        self.images.append(self.device_control.image())
+        yield
 
-    def generic_scan(self, scan_fn, list_of_values):
+    def generic_scan(self, scanning_function, scan_values):
         """Call a scan function on a list of values"""
-        self._scan_task = lambda: (scan_fn(value) for value in list_of_values)
-        self.tasks.append(self._scan_task)
-        self.shapes.append(len(list_of_values))
+        self._scan_task = lambda: (scanning_function(value) for value in scan_values)
+        self.task_tree.append(self._scan_task)
+        self.shapes.append(len(scan_values))
     
     def xy_scan(self, xy_position_list):
         """Scan a list of positions in XY dimension"""
@@ -71,20 +87,8 @@ class Sequential:
     def image(self):
         """Take an image"""
         self.image_ = lambda: (self._image() for _ in [None])
-        self.tasks.append(self.image_)
+        self.task_tree.append(self.image_)
 
-    def run_tasks(self, n=0):
-        """Run recursively a list of tasks, which are generator expressions,
-        generating individual generators
-        
-        This is an equivalent of nested for-loops.
-        """
-        for generator in self.tasks[n]():
-            next(generator)
-            self.device_control.wait_for_device()
-            m=n+1
-            if m < len(self.tasks):
-                self.run_tasks(m)
 
     def run(self):
         """
@@ -99,7 +103,7 @@ class Sequential:
         self.images = np.reshape(self.images, self.shapes)
 
     def __repr__(self):
-        return str(self.tasks)
+        return str(self.task_tree)
 
 
 if __name__ == "__main__":
