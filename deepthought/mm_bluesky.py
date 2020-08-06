@@ -122,7 +122,7 @@ class Camera(SettableDevice):
         t = time.time()
         self.mmc.snapImage()
         self.img = self.mmc.getImage()
-        data['img'] = {'value': self.img, 'timestamp': t}
+        data['camera'] = {'value': self.img, 'timestamp': t}
         return data                          
 
     def describe(self):
