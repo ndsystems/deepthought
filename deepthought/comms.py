@@ -5,8 +5,9 @@ from rpyc.utils.server import ThreadedServer
 
 def share_object(object_, port=18861):
     """expose an object in an address for get_object to connect to"""
-    server = ThreadedServer(object_, port, protocol_config={
-                            'allow_public_attrs': True,})
+    server = ThreadedServer(object_, port=port, protocol_config={
+    'allow_public_attrs': True,
+    })
     print(f"starting server in port {port}")
     server.start()
 
