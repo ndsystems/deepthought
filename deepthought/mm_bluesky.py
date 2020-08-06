@@ -15,7 +15,9 @@ class ReadableDevice:
         return OrderedDict()
     
     def trigger(self):
-        pass
+        status = Status(obj=self, timeout=5)
+        status.set_finished()
+        return status
 
     def read_configuration(self):
         return {}
@@ -50,7 +52,7 @@ class ReadableDevice:
         pass
 
 class SettableDevice(ReadableDevice):
-    def stop(self):
+    def stop(self, *args, **kwargs):
         pass
 
     def set(self, *args, **kwargs):
@@ -60,13 +62,18 @@ class SettableDevice(ReadableDevice):
 
 class Focus(SettableDevice):
     name = "z"
-    
+
     def __init__(self, mmc):
         self.mmc = mmc
+        self.mmc_device_name = "Z"
         self.position = self.mmc.getPosition()
 
-    def stop(self, *args, **kwargs):
-        pass
+    def trigger(self):
+        status = Status(obj=self, timeout=5)
+        # status.add_callback(self.callback)
+        self.mmc.waitForDevice(self.mmc_device_name)
+        status.set_finished()
+        return status
     
     def read(self):
         data = OrderedDict()
@@ -80,27 +87,69 @@ class Focus(SettableDevice):
                      'shape' : []}
         return data                          
 
-    def trigger(self):
-        status = Status(obj=self, timeout=5)
-        status.set_finished()
-        return status
 
- 
     def set(self, value):
         status = Status(obj=self, timeout=5)
+
         self.mmc.setPosition(float(value))
+        self.mmc.waitForDevice(self.mmc_device_name)
         self.position = self.mmc.getPosition()
-        status.add_callback(self.callback)
+
         status.set_finished()
         return status
 
     def callback(self):
         print(f"moved z to: {self.mmc.getPosition()}")
 
-class Camera(Device):
-    name = "camera"
-    
+class Microscope(Device):
+    pass
+
+class Camera(SettableDevice):
     def __init__(self, mmc):
         self.mmc = mmc
-        self.position = self.mmc.getPosition()
+        self.mmc_device_name = "Camera"
+        self.root = Microscope(name="scope")
 
+    def trigger(self):
+        status = Status(obj=self, timeout=5)
+        # status.add_callback(self.callback)
+        self.mmc.waitForDevice(self.mmc_device_name)
+        status.set_finished()
+        return status
+
+    def read(self):
+        data = OrderedDict()
+        t = time.time()
+        self.mmc.snapImage()
+        self.img = self.mmc.getImage()
+        data['img'] = {'value': self.img, 'timestamp': t}
+        return data                          
+
+    def describe(self):
+        data = OrderedDict()
+        data['camera'] = {'source': "cam-label", 
+                     'dtype': "array",
+                     'shape' : [512, 512]}
+        return data                          
+
+    def callback(self):
+        try:
+            print(f"data: {self.img}")
+        except AttributeError:
+            pass
+
+    name = "cam"
+    # parent = Microscope()
+    # root = Microscope()
+
+    # def stage(self):
+    #     pass
+
+    # def unstage(self):
+    #     pass
+    
+    # def pause(self):
+    #     pass
+
+    # def resume(self):
+    #     pass
