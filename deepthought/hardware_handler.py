@@ -3,12 +3,11 @@
 from comms import get_object
 from configs import get_default
 
-default = get_default()
-
-addr = default["server"]["mcu"]
-
 class BaseScope:
-    mmc = get_object(addr)
+    mmc = get_object(port=18861).mmc
+
+    def wait_for_device(self):
+        self.mmc.waitForSystem()
 
     def device_properties(self, device):
         """get property names and values for the given device"""
@@ -34,6 +33,12 @@ class BaseScope:
 
         return all_device_props
 
+    def get_camera(self):
+        device_data = self.device_properties("Core")
+        camera = device_data["Camera"]
+        return camera
+
+
 
 class DefaultScope(BaseScope):
     """all default settings go here, including safety parameters"""
@@ -49,8 +54,7 @@ class Scope(DefaultScope):
         self.xy = [0, 0]
         self.z = 0
         self.channel = "FITC"
-        self.objective = "10X"
-        self.shutter = "auto"
+        self.objective = "10"
         super(Scope, self).__init__()
 
     @property
@@ -59,7 +63,7 @@ class Scope(DefaultScope):
 
     @channel.setter
     def channel(self, label):
-        self.mmc.setConfig("Channel", label)
+        self.mmc.setConfig("channel", label)
         self.__channel = label
 
     @property
@@ -77,7 +81,7 @@ class Scope(DefaultScope):
     @objective.setter
     def objective(self, label):
         # escape the objective lens here, if not done by MMCore
-        self.mmc.setConfig("Objective", label)
+        self.mmc.setConfig("objective", label)
         self.__objective = label
 
     @property
@@ -105,8 +109,9 @@ class Scope(DefaultScope):
 
 class BaseImaging(DefaultScope):
     def __init__(self):
-        self.camera = "Camera"
+        self.camera = self.get_camera()
         self.exposure = 10
+        #self.binning = "1x1"
         super(BaseImaging, self).__init__()
 
     @property
@@ -138,6 +143,16 @@ class BaseImaging(DefaultScope):
         self.mmc.snapImage()
         img = self.mmc.getImage()
         return img
+
+    # @property
+    # def binning(self):
+    #     return self.__binning
+
+    # @binning.setter
+    # def binning(self, label):
+    #     # set binning here
+    #     self.mmc.setProperty(self.camera, "Binning", f"{label}")
+    #     self.__binning = label
 
 
 class pE4000(DefaultScope):

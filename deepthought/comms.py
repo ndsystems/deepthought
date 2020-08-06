@@ -1,21 +1,18 @@
 """Patterns for communication protocol between microservices or modules to interact with different objects"""
-import zerorpc
-import logging
+import rpyc
+from rpyc.utils.server import ThreadedServer
 
 
-
-def share_object(object_, address):
+def share_object(object_, port=18861):
     """expose an object in an address for get_object to connect to"""
-    logging.basicConfig(format='%(asctime)s - %(message)s',
-                        level=logging.DEBUG)
-
-    server = zerorpc.Server(object_)
-    server.bind(address)
-    return server
+    server = ThreadedServer(object_, port, protocol_config={
+                            'allow_public_attrs': True,})
+    print(f"starting server in port {port}")
+    server.start()
 
 
-def get_object(address):
+def get_object(addr="localhost", port=18861):
     """connect to an object served by serve_object"""
-    object_ = zerorpc.Client()
-    object_.connect(address)
-    return object_
+    obj = rpyc.connect(addr, port).root
+    print(f"connected to {port}")
+    return obj
