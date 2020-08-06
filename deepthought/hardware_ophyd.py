@@ -14,9 +14,6 @@ class MMC:
     def snapImage(self):
         pass
 
-    def getImage(self):
-        pass
-
     def setPosition(self, value):
         self.pos = value
     
