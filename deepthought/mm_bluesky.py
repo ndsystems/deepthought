@@ -1,6 +1,8 @@
 import time
-from ophyd.status import Status
 from collections import OrderedDict 
+from ophyd.status import Status
+from ophyd import Device
+from ophyd import Component as Cpt
 
 class ReadableDevice:
     name = None
@@ -95,9 +97,10 @@ class Focus(SettableDevice):
     def callback(self):
         print(f"moved z to: {self.mmc.getPosition()}")
 
-class Camera(SettableDevice):
+class Camera(Device):
     name = "camera"
     
     def __init__(self, mmc):
         self.mmc = mmc
         self.position = self.mmc.getPosition()
+
