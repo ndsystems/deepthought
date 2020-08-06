@@ -6,8 +6,30 @@ from bluesky.utils import ProgressBarManager
 from mm_bluesky import Focus, Camera
 from comms import get_object
 from databroker import Broker
+import numpy as np
 
-mmc = get_object(addr="localhost", port=18861).mmc
+class MMC:
+    pos = 0
+
+    def snapImage(self):
+        pass
+
+    def getImage(self):
+        pass
+
+    def setPosition(self, value):
+        self.pos = value
+    
+    def getPosition(self):
+        return self.pos
+
+    def waitForDevice(self, label):
+        pass
+
+    def getImage(self):
+        return np.empty(shape=(512,512))
+
+mmc = MMC() # get_object(addr="localhost", port=18861).mmc
 
 RE = RunEngine({})
 
