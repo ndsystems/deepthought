@@ -69,10 +69,36 @@ class Focus(SettableDevice):
         self.position = self.mmc.getPosition()
 
     def trigger(self):
+        """
+        Trigger the device.
+
+        This does not block for triggering to complete. It promptly returns a
+        Status object which can be used to detect completion.
+
+        >>> st = my_instance.trigger()
+
+        You can block for completion of triggering (sync).
+        >>> st.wait()
+
+        Or register a function to be called upon completion and then continue
+        to run other code (async). The function f will be called like f(st)
+        from another thread.
+        >>> st.add_callback(f)
+        """
         status = Status(obj=self, timeout=5)
-        # status.add_callback(self.callback)
-        self.mmc.waitForDevice(self.mmc_device_name)
-        status.set_finished()
+
+        def wait():
+            "This will be run on a thread."
+            try:
+                self.mmc.waitForDevice(self.mmc_device_name)
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        # Kick of a thread that will eventually mark the status as done...
+        threading.Thread(target=wait).start()
+        # ...and immediately return the status.
         return status
     
     def read(self):
