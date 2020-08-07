@@ -3,6 +3,25 @@ from collections import OrderedDict
 from ophyd.status import Status
 from ophyd import Device
 from ophyd import Component as Cpt
+import numpy as np
+
+class DummyMMC:
+    pos = 0
+
+    def snapImage(self):
+        pass
+
+    def setPosition(self, value):
+        self.pos = value
+    
+    def getPosition(self):
+        return self.pos
+
+    def waitForDevice(self, label):
+        pass
+
+    def getImage(self):
+        return np.empty(shape=(512,512))
 
 class ReadableDevice:
     name = None
@@ -60,6 +79,9 @@ class SettableDevice(ReadableDevice):
     
     position = None
 
+class Microscope(Device):
+    pass
+
 class Focus(SettableDevice):
     name = "z"
 
@@ -70,7 +92,6 @@ class Focus(SettableDevice):
 
     def trigger(self):
         status = Status(obj=self, timeout=5)
-        # status.add_callback(self.callback)
         self.mmc.waitForDevice(self.mmc_device_name)
         status.set_finished()
         return status
@@ -101,8 +122,6 @@ class Focus(SettableDevice):
     def callback(self):
         print(f"moved z to: {self.mmc.getPosition()}")
 
-class Microscope(Device):
-    pass
 
 class Camera(SettableDevice):
     def __init__(self, mmc):
@@ -112,16 +131,18 @@ class Camera(SettableDevice):
 
     def trigger(self):
         status = Status(obj=self, timeout=5)
-        # status.add_callback(self.callback)
         self.mmc.waitForDevice(self.mmc_device_name)
         status.set_finished()
         return status
 
     def read(self):
         data = OrderedDict()
+        
         t = time.time()
         self.mmc.snapImage()
         self.img = self.mmc.getImage()
+        self.img = np.asarray(self.img)
+
         data['camera'] = {'value': self.img, 'timestamp': t}
         return data                          
 
@@ -139,17 +160,3 @@ class Camera(SettableDevice):
             pass
 
     name = "cam"
-    # parent = Microscope()
-    # root = Microscope()
-
-    # def stage(self):
-    #     pass
-
-    # def unstage(self):
-    #     pass
-    
-    # def pause(self):
-    #     pass
-
-    # def resume(self):
-    #     pass

@@ -1,5 +1,4 @@
 """MMCore hardware abstraction layer access as RPC"""
-# from comms import share_object
 import os
 from configs import get_default
 import pymmcore
@@ -13,7 +12,6 @@ class Micromanager(rpyc.Service):
     def on_connect(self, conn):
         # code that runs when a connection is created
         # (to init the service, if needed)
-        self.exposed_load_microscope()
         pass
 
     def on_disconnect(self, conn):
@@ -21,7 +19,7 @@ class Micromanager(rpyc.Service):
         # (to finalize the service, if needed)
         pass
 
-    def exposed_load_microscope(self, config_path=default["mm"]["cfg_file"]):
+    def load_microscope(self, config_path=default["mm"]["cfg_file"]):
         """initialize MMCore for the given micro-manager config file"""
         config_abspath = os.path.abspath(config_path)
 
