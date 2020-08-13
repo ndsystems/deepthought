@@ -1,18 +1,25 @@
-from bluesky.plans import scan
+from bluesky.plans import scan, count
 from bluesky import RunEngine
 from databroker import Broker
-from mm_bluesky import Focus, Camera
-from comms import get_object
+from bluesky.callbacks.best_effort import BestEffortCallback
+from bluesky.callbacks.broker import LiveTiffExporter
+from mm_bluesky import Camera
+
+bec = BestEffortCallback()
+bec.disable_plots()
+db = Broker.named('temp')
+template = "output_dir/{start[scan_id]}_{event[seq_num]}.tiff"
+live = LiveTiffExporter("camera", template=template, db=db)
 
 RE = RunEngine({})
-db = Broker.named('temp')
+RE.subscribe(bec)
 RE.subscribe(db.insert)
+RE.subscribe(live)
 
-mmc = get_object(addr="localhost", port=18861).mmc
-z = Focus(mmc)
-cam = Camera(mmc)
+cam = Camera()
 
-uid, = RE(scan([cam], z, 0, 10, num=9))
+
+uid, = RE(count([cam], num=10, delay=1))
 
 header = db[uid]
 print(header.table())

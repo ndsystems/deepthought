@@ -1,9 +1,19 @@
+"""
+References:
+
+1. https://nsls-ii.github.io/ophyd/architecture.html#uniform-high-level-interface
+2. https://github.com/SEBv15/GSD192-tools
+"""
 import time
+import threading
+from typing import Dict, List, Any, TypeVar, Tuple
+
+from comms import get_object
 from collections import OrderedDict 
 from ophyd.status import Status
-from ophyd import Device
-from ophyd import Component as Cpt
+
 import numpy as np
+
 
 class DummyMMC:
     pos = 0
@@ -23,66 +33,7 @@ class DummyMMC:
     def getImage(self):
         return np.empty(shape=(512,512))
 
-class ReadableDevice:
-    name = None
-    parent = None
-
-    def read(self):
-        return OrderedDict()
-
-    def describe(self):
-        return OrderedDict()
-    
-    def trigger(self):
-        status = Status(obj=self, timeout=5)
-        status.set_finished()
-        return status
-
-    def read_configuration(self):
-        return {}
-    
-    def describe_configuration(self):
-        return {}
-    
-    hints = {}
-
-    def configure(self, *args, **kwargs):
-        pass
-
-    def stage(self):
-        pass
-
-    def unstage(self):
-        pass
-
-    def subscribe(self, function):
-        pass
-    
-    def clear_sub(self, function):
-        pass
-
-    def pause(self):
-        pass
-
-    def resume(self):
-        pass
-
-    def add_callback(self):
-        pass
-
-class SettableDevice(ReadableDevice):
-    def stop(self, *args, **kwargs):
-        pass
-
-    def set(self, *args, **kwargs):
-        pass
-    
-    position = None
-
-class Microscope(Device):
-    pass
-
-class Focus(SettableDevice):
+class Focus:
     name = "z"
 
     def __init__(self, mmc):
@@ -91,36 +42,9 @@ class Focus(SettableDevice):
         self.position = self.mmc.getPosition()
 
     def trigger(self):
-        """
-        Trigger the device.
-
-        This does not block for triggering to complete. It promptly returns a
-        Status object which can be used to detect completion.
-
-        >>> st = my_instance.trigger()
-
-        You can block for completion of triggering (sync).
-        >>> st.wait()
-
-        Or register a function to be called upon completion and then continue
-        to run other code (async). The function f will be called like f(st)
-        from another thread.
-        >>> st.add_callback(f)
-        """
         status = Status(obj=self, timeout=5)
-
-        def wait():
-            "This will be run on a thread."
-            try:
-                self.mmc.waitForDevice(self.mmc_device_name)
-            except Exception as exc:
-                status.set_exception(exc)
-            else:
-                status.set_finished()
-
-        # Kick of a thread that will eventually mark the status as done...
-        threading.Thread(target=wait).start()
-        # ...and immediately return the status.
+        self.mmc.waitForDevice(self.mmc_device_name)
+        status.set_finished()
         return status
     
     def read(self):
@@ -150,39 +74,119 @@ class Focus(SettableDevice):
         print(f"moved z to: {self.mmc.getPosition()}")
 
 
-class Camera(SettableDevice):
-    def __init__(self, mmc):
-        self.mmc = mmc
-        self.mmc_device_name = "Camera"
-        self.root = Microscope(name="scope")
+class Camera:
+    def __init__(self):
+        self.name = "camera"
+        self.mmc = get_object(addr="localhost", port=18861).load_microscope()
+        self.parent = None
+        self.mmc_device_name = str(self.mmc.getCameraDevice())
+
+        self.image = None
+
+        self._config = OrderedDict([
+            ('exposure', {'value': 10, 'timestamp': time.time()}),
+            ('gain', {'value': 1, 'timestamp': time.time()}),
+            ('binning', {'value': 4, 'timestamp': time.time()}),
+            ('rate', {'value': 520, 'timestamp': time.time()}),
+        ])
+
+        self._subscribers = []
+
+
+    def _collection_callback(self):
+        self.total_images += 1
+        
+        for subscriber in self._subscribers:
+            threading.Thread(target=subscriber).start()
 
     def trigger(self):
-        status = Status(obj=self, timeout=5)
-        self.mmc.waitForDevice(self.mmc_device_name)
-        status.set_finished()
+        status = Status(obj=self, timeout=10)
+        
+        def wait():
+            try:
+                self.mmc.snapImage()
+                time.sleep(0.5)
+                self.mmc.waitForDevice(self.mmc_device_name)
+                self.img = self.mmc.getImage()
+
+                self.img = np.asarray(self.img)
+                self.img_time = time.time()
+
+            except Exception as exc:
+                status.set_exception(exc)
+
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
         return status
 
-    def read(self):
+    def read(self) -> OrderedDict:
         data = OrderedDict()
-        
-        t = time.time()
-        self.mmc.snapImage()
-        self.img = self.mmc.getImage()
-        self.img = np.asarray(self.img)
-
-        data['camera'] = {'value': self.img, 'timestamp': t}
-        return data                          
+        data['camera'] = {'value': self.img, 'timestamp': self.img_time}
+        return data
 
     def describe(self):
         data = OrderedDict()
-        data['camera'] = {'source': "cam-label", 
-                     'dtype': "array",
-                     'shape' : [512, 512]}
-        return data                          
+        data['camera'] = {'source': self.mmc_device_name, 
+                     'dtype': 'array',
+                     'shape' : self.img.shape}
+        return data                                                    
 
-    def callback(self):
-        try:
-            print(f"data: {self.img}")
-        except AttributeError:
-            pass
+    def subscribe(self, func):
+        if not func in self._subscribers:
+            self._subscribers.append(func)
 
+    def clear_sub(self, func):
+        self._subscribers.remove(func)
+
+    def read_configuration(self) -> OrderedDict:
+        return self._config.copy()
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict([
+            ('exposure', {'source': self.mmc_device_name, 'dtype': 'number', 'shape': []}),
+            ('gain', {'source': self.mmc_device_name, 'dtype': 'number', 'shape': []}),
+            ('binning', {'source': self.mmc_device_name, 'dtype': 'number', 'shape': []}),
+            ('rate', {'source': self.mmc_device_name, 'dtype': 'number', 'shape': []})
+        ])
+
+
+    def configure(self, exposure:int=None, gain:int=None, binning:int=None, rate:int=None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        old = self.read_configuration()
+        if exposure is not None:
+            if not 10 <= exposure <= 5000:
+                # this shouldn't be hard coded
+                raise ValueError("Exposure must be between 10 - 5000 ms")
+            self._config["exposure"]["value"] = exposure
+            self._config["exposure"]["timestamp"] = time.time()
+        
+        if gain is not None:
+            if gain not in [0, 1]:
+                raise ValueError("Gain must be either 0 or 1")
+            self._config["gain"]["value"] = gain
+            self._config["gain"]["timestamp"] = time.time()
+        
+        if binning is not None:
+            if binning not in [1, 2, 4]:
+                raise ValueError("Binning is only possible for 1, 2 or 4")
+            self._config["binning"]["value"] = binning
+            self._config["binning"]["timestamp"] = time.time()
+        
+        if rate is not None:
+            if rate not in [540, 240]:
+                # verify these values
+                raise ValueError("Read rate should be 540 or 240")
+            self._config["rate"]["value"] = rate
+            self._config["rate"]["timestamp"] = time.time()
+
+        # set the values with micromanager
+
+        return old, self.read_configuration()
+
+    def pause(self):
+        pass
+
+    def resume(self):
+        pass
