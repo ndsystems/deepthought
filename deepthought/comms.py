@@ -1,7 +1,6 @@
 """Patterns for communication protocol between microservices or modules to interact with different objects"""
 import rpyc
 from rpyc.utils.server import ThreadedServer
-from configs import config
 
 def server(object_, port, *args, **kwargs):
     s = ThreadedServer(object_, port=port, protocol_config={

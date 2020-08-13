@@ -8,8 +8,7 @@ import time
 import threading
 from typing import Dict, List, Any, TypeVar, Tuple
 
-from comms import client
-from configs import config
+
 from collections import OrderedDict 
 from ophyd.status import Status
 
@@ -36,16 +35,26 @@ class DummyMMC:
 
 class Focus:
     name = "z"
+    parent = None
 
-    def __init__(self):
-        self.mmc = client(**config["mm_server"]).load_microscope()
+    def __init__(self, mmc):
+        self.mmc = mmc
         self.mmc_device_name = "Z"
         self.position = self.mmc.getPosition()
 
     def trigger(self):
-        status = Status(obj=self, timeout=5)
-        self.mmc.waitForDevice(self.mmc_device_name)
-        status.set_finished()
+        status = Status(obj=self, timeout=10)
+        
+        def wait():
+            try:
+                self.mmc.waitForDevice(self.mmc_device_name)
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
         return status
     
     def read(self):
@@ -63,23 +72,33 @@ class Focus:
 
     def set(self, value):
         status = Status(obj=self, timeout=5)
+        def wait():
+            try:
+                self.mmc.setPosition(float(value))
+                self.mmc.waitForDevice(self.mmc_device_name)
+                self.position = self.mmc.getPosition()
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
 
-        self.mmc.setPosition(float(value))
-        self.mmc.waitForDevice(self.mmc_device_name)
-        self.position = self.mmc.getPosition()
+        threading.Thread(target=wait).start()
 
-        status.set_finished()
         return status
 
-    def callback(self):
-        print(f"moved z to: {self.mmc.getPosition()}")
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()
 
 
 class Camera:
-    def __init__(self):
-        self.name = "camera"
-        self.mmc = client(**config["mm_server"]).load_microscope()
-        self.parent = None
+    name = "camera"
+    parent = None
+
+    def __init__(self, mmc):
+        self.mmc = mmc
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 
         self.image = None

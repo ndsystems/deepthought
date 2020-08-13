@@ -3,23 +3,28 @@ from bluesky import RunEngine
 from databroker import Broker
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky.callbacks.broker import LiveTiffExporter
-from mm_bluesky import Camera
+from mm_bluesky import Camera, Focus
+
+from comms import client
+from configs import config
+
 
 bec = BestEffortCallback()
 bec.disable_plots()
 db = Broker.named('temp')
 template = "output_dir/{start[scan_id]}_{event[seq_num]}.tiff"
-live = LiveTiffExporter("camera", template=template, db=db)
+live = LiveTiffExporter("camera", template=template, db=db, overwrite=True)
 
 RE = RunEngine({})
 RE.subscribe(bec)
 RE.subscribe(db.insert)
 RE.subscribe(live)
 
-cam = Camera()
+mmc = client(**config["mm_server"]).load_microscope()
+cam = Camera(mmc)
+motor = Focus(mmc)
 
-
-uid, = RE(count([cam], num=10, delay=1))
+uid, = RE(scan([cam], motor, 0, 10, 10))
 
 header = db[uid]
 print(header.table())

@@ -8,5 +8,5 @@ if os.name == 'nt':
 elif os.name == "posix":
     config["mm_dir"] = "/home/dna/lab/software/micromanager/lib/micro-manager"
 
-config["mm_config"] = "/mmconfigs/demo.cfg"
+config["mm_config"] = "./mmconfigs/demo.cfg"
 config["mm_server"] = {"addr" : "localhost", "port" : 18861}
