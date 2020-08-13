@@ -104,13 +104,12 @@ class Camera:
         
         def wait():
             try:
-                self.mmc.snapImage()
-                time.sleep(0.5)
-                self.mmc.waitForDevice(self.mmc_device_name)
-                self.img = self.mmc.getImage()
-
-                self.img = np.asarray(self.img)
                 self.img_time = time.time()
+                self.mmc.snapImage()
+                self.mmc.waitForDevice(self.mmc_device_name)
+
+                self.img = self.mmc.getImage()
+                self.img = np.asarray(self.img)
 
             except Exception as exc:
                 status.set_exception(exc)
