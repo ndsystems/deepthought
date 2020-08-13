@@ -1,12 +1,12 @@
-import configparser
+from collections import OrderedDict 
+import os
 
+config = OrderedDict()
 
-def get_default():
-    default = configparser.ConfigParser()
-    default.read('default.ini')
-    return default
+if os.name == 'nt':
+    config["mm_dir"] = "C:\Program Files\Micro-Manager-2.0gamma"
+elif os.name == "posix":
+    config["mm_dir"] = "/home/dna/lab/software/micromanager/lib/micro-manager"
 
-
-if __name__ == "__main__":
-    default = get_default()
-    print(default.sections())
+config["mm_config"] = "/mmconfigs/demo.cfg"
+config["mm_server"] = {"addr" : "localhost", "port" : 18861}

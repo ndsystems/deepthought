@@ -1,11 +1,10 @@
 """MMCore hardware abstraction layer access as RPC"""
 import os
-from configs import get_default
-default = get_default()
+from configs import config
 
 import pymmcore
 import rpyc
-from comms import share_object
+from comms import server
 
 import numpy as np
 from skimage import io
@@ -19,17 +18,14 @@ class Micromanager(rpyc.Service):
     def on_disconnect(self, conn):
         pass
 
-    def load_microscope(self, config_path=default["mm"]["cfg_file"]):
+    def load_microscope(self, config_path=None):
         """initialize MMCore for the given micro-manager config file"""
+
+        if config_path is None:
+            config_path = config["mm_config"]
         config_abspath = os.path.abspath(config_path)
-
+        mm_dir = config["mm_dir"]
         working_dir = os.getcwd()
-
-        if os.name == 'nt':
-            mm_dir = default["mm"]["win_path"]
-
-        elif os.name == "posix":
-            mm_dir = default["mm"]["linux_path"]
 
         os.chdir(mm_dir)
 
@@ -57,4 +53,4 @@ def get_simulated_image():
 
 
 if __name__ == "__main__":
-    share_object(Micromanager)
+    server(Micromanager, **config["mm_server"])

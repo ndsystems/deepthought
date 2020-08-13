@@ -8,7 +8,8 @@ import time
 import threading
 from typing import Dict, List, Any, TypeVar, Tuple
 
-from comms import get_object
+from comms import client
+from configs import config
 from collections import OrderedDict 
 from ophyd.status import Status
 
@@ -36,8 +37,8 @@ class DummyMMC:
 class Focus:
     name = "z"
 
-    def __init__(self, mmc):
-        self.mmc = mmc
+    def __init__(self):
+        self.mmc = client(**config["mm_server"]).load_microscope()
         self.mmc_device_name = "Z"
         self.position = self.mmc.getPosition()
 
@@ -77,7 +78,7 @@ class Focus:
 class Camera:
     def __init__(self):
         self.name = "camera"
-        self.mmc = get_object(addr="localhost", port=18861).load_microscope()
+        self.mmc = client(**config["mm_server"]).load_microscope()
         self.parent = None
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 

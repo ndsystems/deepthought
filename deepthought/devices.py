@@ -1,8 +1,5 @@
 "abstraction of devices"
 
-from comms import get_object
-from configs import get_default
-
 class BaseScope:
     def __init__(self, mmc):
         self.mmc = mmc
