@@ -39,7 +39,7 @@ class Focus:
 
     def __init__(self, mmc):
         self.mmc = mmc
-        self.mmc_device_name = "Z"
+        self.mmc_device_name = self.mmc.getFocusDevice()
         self.position = self.mmc.getPosition()
 
     def trigger(self):
