@@ -4,3 +4,4 @@ __pycache__/
 *.sh
 notes
 deepthought/output_dir
+env/
