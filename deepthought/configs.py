@@ -8,5 +8,12 @@ if os.name == 'nt':
 elif os.name == "posix":
     config["mm_dir"] = "/home/dna/lab/software/micromanager/lib/micro-manager"
 
-config["mm_config"] = "./mmconfigs/demo.cfg"
-config["mm_server"] = {"addr" : "localhost", "port" : 18861}
+config["mm_config"] = "./mmconfigs/Bright_Star.cfg"
+
+mm_ip = "MM_IP"
+if mm_ip in os.environ:
+    mm_server_ip = os.environ[mm_ip]
+else:
+    mm_server_ip = "localhost"
+
+config["mm_server"] = {"addr" : mm_server_ip, "port" : 18861}
