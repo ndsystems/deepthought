@@ -5,3 +5,4 @@ __pycache__/
 notes
 deepthought/output_dir
 env/
+.vscode/
