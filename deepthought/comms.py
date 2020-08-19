@@ -3,12 +3,13 @@ import rpyc
 from rpyc.utils.server import ThreadedServer
 
 def server(object_, port, *args, **kwargs):
-    s = ThreadedServer(object_, port=port, protocol_config={
-        "allow_all_attrs": True, "allow_pickle" : True,
-    })
+    s = ThreadedServer(object_, hostname="", port=port, auto_register=None,
+                         protocol_config={"allow_all_attrs": True, 
+                                          "allow_pickle" : True,
+                                        }
+                      )
     print(f"Starting server in: {port}")
-    s.start()
-
+    return s
 
 def client(addr, port, *args, **kwargs):
     obj = rpyc.connect(addr, port, config={
