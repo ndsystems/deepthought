@@ -22,7 +22,9 @@ def unload():
     print("unloading")
     mmc.reset()
 
+os.chdir(mm_dir)
 mmc = create_mmc_obj()
+os.chdir(working_dir)
 
 class Microscope(rpyc.Service):
     def on_connect(self, conn):
