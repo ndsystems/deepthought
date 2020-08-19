@@ -20,7 +20,7 @@ RE.subscribe(bec)
 RE.subscribe(db.insert)
 RE.subscribe(live)
 
-mmc = client(**config["mm_server"]).load_microscope()
+mmc = client(**config["mm_server"]).mmc
 cam = Camera(mmc)
 motor = Focus(mmc)
 
