@@ -1,8 +1,3 @@
-deepthought (dt) is a microscope acquisition library that aims to provide an easy to use API for higher order tasks performed by a microscope user.
+The primary task of a microscopy user is to make observations of their sample. However, in the current tools the user has to pass thru many hurdles before meaningful information of their sample is gained. We aim to create high order patterns on top of device abstraction, experiment orchestration and online-analysis.
 
-# Architecture Overview
-dt uses the micromanager MMCore hardware abstraction layer to communicate with the hardware. The hardware abstraction layer is run separately, and accesibly by RPC like a microservice. (`mm_server`)
-
-In a higher level of abstraction, the devices are `ophyd` objects that makes them compatible with `bluesky` for experiment orchestration and data management.
-
-Future plans include live spatial mapping of sample.
+deepthought is a software suite that makes it easy and efficient for a researcher to carry out experiments, manage projects, instrument time, or share data with others.
