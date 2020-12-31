@@ -4,7 +4,7 @@ The task of a microscopy user is to make observations of their sample and arrive
 
 deepthought
 --
-deepthought is a software suite that builds on top of device abstraction, experiment orchestration and object detection to present online-analysis of the sample.
+deepthought is a software suite that builds on top of device abstraction, experiment orchestration and object detection to present online information of the sample, along many dimensions, to the user.
  
 project evolution tools
 --
