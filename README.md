@@ -1,6 +1,6 @@
 abstract
 --
-The task of a microscopy user is to make observations of their sample and arrive at meaningful conclusions. However, in the current tools, the user has to pass thru many hurdles before meaningful information of their sample is obtained. We aim to create an easy and efficient system for a researcher to carry out experiments, manage projects, instrument time, or share data with others. 
+The task of a microscopy user is to make observations of their sample and arrive at meaningful conclusions. However, in the current tools, the user has to pass thru many hurdles before meaningful information of their sample is obtained and stored. We aim to create an easy and efficient system for a researcher to carry out experiments, manage projects, instrument time, or share data with others. 
 
 deepthought
 --
