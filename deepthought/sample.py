@@ -49,26 +49,22 @@ class Sample:
 
 
 class SampleIdentity:
-    """What is the identity of the sample which is common across objects.
-    
-        * is the sample dead or alive.
-        * is it is a cell or a tissue.
-        * what is the type of the sample.
-        * what are the conditions of the sample.
-        * what are the channels in the sample.
-    """
+    """What are the identities that define a sample."""
     def __init__(self, sample):
-        # boolean
+        # what are the taxanomical specifics of the sample
+        # example -> "HeLa"
+        self.taxa = None
+        
+        # is the sample fixed or alive -> boolean
         self.living = None
-        # at what biological level is the sample
-        self.level = None
-        # what type of sample is it
-        self.sample_type = None
+        
         # under what condition does the sample exist
+        # example -> control or treatment with MMS (0.01%) from start_time
         self.conditions = None
-        # what are the channels in the sample
-        self.channels = None
 
+        # how is the sample oriented in the Form geometry
+        self.orientation = None
+        
 
 class Object:
     """Lower level entity in the sample that points to a point in space
@@ -89,27 +85,33 @@ class Object:
 
 
 class ObjectIdentity:
-    """What is the identity of the sample.
-    
-        * where is the object in xy.
-        * what are the channels present.
-        * what is the imaging matrix for the object.
-    """
-    def __init__(self, obj):
+    """What is the identity of the sample."""
+    def __init__(self):
         # where did I come from
-        obj.parent = None
+        self.parent = None
+        
         # where is the object in xy
-        obj.xy = None
-        # which sample channels are present in the object
-        obj.channels = None
-        # how does one best image this object.
-        obj.imaging_matrix = ImagingMatrix()
+        self.xy = None
+        
+        # what are the variable parameters to image the sample in
+        self.imaging_matrix = ImagingMatrix()
 
 
 class ImagingMatrix():
-    """Information on how to image any object in the sample. This could
-    be the relavant exposure time, binning, gain, camera choice, and any
-    other customizations associated with the image."""
+    """How to image any object in the sample."""
     def __init__(self):
-        self.exposure = None
-        self.gain = None
+        self.channels = None
+
+    def update(self):
+        self.light = Light(
+            self.mode = None,
+            self.intensity = None,
+            )
+
+        self.cam = Camera(
+                self.exposure = None, 
+                self.gain = None,
+                self.bounding_box = None,
+            )
+
+        
