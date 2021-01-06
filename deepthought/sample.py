@@ -7,13 +7,19 @@ class Form:
     
     This can be a rectangular entity, circular entity or an array entity.
     
+    The form can have geometrical information of the sample
+    which enables computations of factors like sample tilt, or
+    displacement upon perturbance, and adjust it in one place.
+
+
     Note
     ----
-    # talk to an architect to represent this better.
+    # talk to an architect to design this better.
     """
     def __init__(self):
         self.shape = None
         self.size = None
+
 
 class Sample:
     """A sample is a multi-dimensional physical entity.
@@ -22,32 +28,36 @@ class Sample:
     such as dishes or slide, each optimizing for parameters such as cost,
     performance, sample consideration.
     
-    Within these forms, collections of biological entity occupy space.
+    With in these forms, collections of biological entity occupy space.
     Each sample object can therefore be identified with a xy coordinate.
     """
-    def __init__(self):
-        # who or what am I?
-        self.identity = None
+    def __init__(self, name):
+        # give me a name
+        self.name = name
 
-        # a collection of SampleObjects
+        # who or what am I?
+        self.identity = SampleIdentity()
+
+        # are there objects associated with me?
         self.objects = None
 
         # material properties of the sample
-        # the form can have geometrical information of the sample
-        # which enables computations of factors like sample tilt, or
-        # displacement upon perturbance.
-        self.form = None
-    
+        self.form = Form()
+
+        # is there a map of myself?
+        self.map = SampleMap()
+
 
 class SampleIdentity:
-    """What is the identity of the sample.
+    """What is the identity of the sample which is common across objects.
     
         * is the sample dead or alive.
         * is it is a cell or a tissue.
         * what is the type of the sample.
         * what are the conditions of the sample.
+        * what are the channels in the sample.
     """
-    def __init__(self):
+    def __init__(self, sample):
         # boolean
         self.living = None
         # at what biological level is the sample
@@ -56,24 +66,50 @@ class SampleIdentity:
         self.sample_type = None
         # under what condition does the sample exist
         self.conditions = None
+        # what are the channels in the sample
+        self.channels = None
 
 
-class SampleObject:
-    """An object that represents an entity in the sample."""
+class Object:
+    """Lower level entity in the sample that points to a point in space
+    denoting a biological entity.
+
+    This could be an individual cell (xy) or a region in tissue (xyz).
+    """
     
-    def __init__(self, xy):
-        # who created me?
-        self.parent = None 
+    def __init__(self):
+        # who and what am i?
+        self.identity = None
 
         # where do I look for my history?
-        self.history = None
-        
-        # where is the object in xy space of the Sample?
-        # since objects are unique in space, 
-        #   1. segmenting the raw DAPI image
-        #   2. label objects and compute regionprops
-        #   3. calculate stage coordinates for image coordinates
-        self.xy = xy
+        self.history = None    
 
-        # how do I image the object?
-        self.imaging_parameters = OrderedDict()        
+    def identify(self):
+        pass
+
+
+class ObjectIdentity:
+    """What is the identity of the sample.
+    
+        * where is the object in xy.
+        * what are the channels present.
+        * what is the imaging matrix for the object.
+    """
+    def __init__(self, obj):
+        # where did I come from
+        obj.parent = None
+        # where is the object in xy
+        obj.xy = None
+        # which sample channels are present in the object
+        obj.channels = None
+        # how does one best image this object.
+        obj.imaging_matrix = ImagingMatrix()
+
+
+class ImagingMatrix():
+    """Information on how to image any object in the sample. This could
+    be the relavant exposure time, binning, gain, camera choice, and any
+    other customizations associated with the image."""
+    def __init__(self):
+        self.exposure = None
+        self.gain = None
