@@ -17,36 +17,38 @@ class Form:
         # how is the sample oriented
         self.orientation = None
 
+
 class Sample:
-    """A sample is a multi-dimensional physical entity.
-    
-    It is materially constructed with certain design goals, onto forms
-    such as dishes or slide, each optimizing for parameters such as cost,
-    performance, sample consideration.
-    
-    With in these forms, collections of biological entity occupy space.
-    Each sample object can therefore be identified with a xy coordinate.
+    """A sample is an entity with physical form within which
+    biological entities occupy space.
+
+    There are often conditions of the sample that are common to all
+    entities within the sample. These establish the sample identity.
     """
     def __init__(self, name):
         # give me a name
         self.name = name
 
-        # who or what am I?
-        self.identity = SampleIdentity()
-
-        # are there objects associated with me?
-        self.objects = None
-
         # material properties of the sample
         self.form = Form()
 
-        # is there a map of myself?
-        self.map = SampleMap()
+        # who or what am I?
+        self.identity = SampleIdentity()
 
 
 class SampleIdentity:
-    """What are the identities that define a sample."""
+    """What identities do Samples have. 
+    
+    Is it dead or alive?
+    What are the flurophores present in the sample?
+    Does it look like the plate from last week that didn't work?
+    Does it have any contamination?
+    Is it going thru apoptosis? 
+    """
     def __init__(self, sample):
+        # Am I a Sample of a Sample?
+        self.parent = None
+
         # what are the taxanomical specifics of the sample
         # example -> "HeLa"
         self.taxa = None
@@ -58,24 +60,20 @@ class SampleIdentity:
         # example -> control or treatment with MMS (0.01%) from start_time
         self.conditions = None
 
+        # what are the flourescent dyes present in the sample?
+        self.dyes = None
         
 
 class Object:
-    """Lower level entity in the sample that points to a point in space
-    denoting a biological entity.
+    """Objects is an individual biological entity that exist within the form
+    of a Sample.
 
-    This could be an individual cell (xy) or a region in tissue (xyz).
-    """
-    
+    Objects will have to be identified in a Sample, either manually or
+    using an algorithm.
+   """
     def __init__(self):
         # who and what am i?
-        self.identity = None
-
-        # where do I look for my history?
-        self.history = None    
-
-    def identify(self):
-        pass
+        self.identity = ObjectIdentity()
 
 
 class ObjectIdentity:
@@ -91,7 +89,7 @@ class ObjectIdentity:
         self.imaging_matrix = ImagingMatrix()
 
 
-class ImagingMatrix():
+class ImagingMatrix:
     """How to image any object in the sample."""
     def __init__(self):
         self.channels = None
@@ -107,3 +105,8 @@ class ImagingMatrix():
                 self.gain = None,
                 self.bounding_box = None,
             )
+
+
+class SampleMap:
+    """Picture of where and how things are."""
+    pass
