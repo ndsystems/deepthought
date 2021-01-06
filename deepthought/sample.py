@@ -1,25 +1,21 @@
-"""abstractions for object viewer in object dashboard"""
+"""Abstract representation of a Sample used in imaging."""
 from collection import OrderedDict
 
 
 class Form:
     """A physical object onto which the sample resides.
     
-    This can be a rectangular entity, circular entity or an array entity.
-    
-    The form can have geometrical information of the sample
-    which enables computations of factors like sample tilt, or
-    displacement upon perturbance, and adjust it in one place.
+    The sample is a polygon with a defined shape that mark the boundaries
+    within which Objects reside. This can be an array of stage coordinates.
 
-
-    Note
-    ----
-    # talk to an architect to design this better.
+    The orientation of the Sample Form can also be unique.
     """
     def __init__(self):
+        # what function best describes the polygon shape of the Sample
         self.shape = None
-        self.size = None
-
+        
+        # how is the sample oriented
+        self.orientation = None
 
 class Sample:
     """A sample is a multi-dimensional physical entity.
@@ -62,8 +58,6 @@ class SampleIdentity:
         # example -> control or treatment with MMS (0.01%) from start_time
         self.conditions = None
 
-        # how is the sample oriented in the Form geometry
-        self.orientation = None
         
 
 class Object:
@@ -113,5 +107,3 @@ class ImagingMatrix():
                 self.gain = None,
                 self.bounding_box = None,
             )
-
-        
