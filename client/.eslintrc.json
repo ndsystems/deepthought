@@ -1,0 +1,18 @@
+// ref: https://github.com/prettier/eslint-plugin-prettier
+{
+  "parser": "babel-eslint",
+  "extends": ["plugin:prettier/recommended"],
+  "plugins": ["prettier"],
+  "rules": {
+    "strict": 0,
+    "no-unused-vars": "warn",
+    "react/prop-types": "warn",
+    "func-names": ["error", "never"],
+    "react/jsx-filename-extension": [1, { "extensions": [".js", ".jsx"] }],
+    "prettier/prettier": "error"
+  },
+  "env": {
+    "browser": true,
+    "jest": true
+  }
+}
