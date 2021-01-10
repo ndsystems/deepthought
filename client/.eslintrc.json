@@ -9,7 +9,7 @@
     "react/prop-types": "warn",
     "func-names": ["error", "never"],
     "react/jsx-filename-extension": [1, { "extensions": [".js", ".jsx"] }],
-    "prettier/prettier": "error"
+    "prettier/prettier": "warn"
   },
   "env": {
     "browser": true,
