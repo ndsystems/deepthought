@@ -6,17 +6,18 @@ References:
 1. https://nsls-ii.github.io/ophyd/architecture.html#uniform-high-level-interface
 2. https://github.com/SEBv15/GSD192-tools
 """
+
 import time
 import threading
 from typing import Dict, List, Any, TypeVar, Tuple
 
 
 from collections import OrderedDict 
-from ophyd.status import Status
 
 import numpy as np
 from skimage import io
 
+from ophyd.status import Status
 
 class BaseScope:
     def __init__(self, mmc):
@@ -137,6 +138,9 @@ class SimMMC:
     def get_simulated_image(self):
         data = io.imread("sim_data/DAPI.tif")
         return self.get_random_crop(data)
+
+
+
 
 
 class Focus:
