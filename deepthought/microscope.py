@@ -9,30 +9,31 @@ construction
 a microscope is made up of modular device components that work together
 to orchestrate an experimental task. 
 
-these modules are   1. XYStage
-                        1. xy position
-                        2. limits of stage
-                    2. NosePiece
-                        1. Objectives
-                        2. Z value
-                    3. EnteringLight
-                        1. LightSources
-                            1. LED
-                                1. Intensity
-                                2. Wavelength
-                            2. Hallide
-                                1. Intensity
-                        2. Shutters 
-                        3. Optics
-                            1. Mirrors
-                            2. Condensor
-                    4. ExitingLight
-                        1. ViewPorts
-                            1. Detectors
-                                1. exposure
-                                2. gain
-                                3. binning
-                            2. EyePiece
+these modules are   
+    1. XYStage
+        1. xy position
+        2. limits of stage
+    2. NosePiece
+        1. Objectives
+        2. Z value
+    3. EnteringLight
+        1. LightSources
+            1. LED
+                1. Intensity
+                2. Wavelength
+            2. Hallide
+                1. Intensity
+        2. Shutters 
+        3. Optics
+            1. Mirrors
+            2. Condensor
+    4. ExitingLight
+        1. ViewPorts
+            1. Detectors
+                1. exposure
+                2. gain
+                3. binning
+            2. EyePiece
 
 
 usage primitives
