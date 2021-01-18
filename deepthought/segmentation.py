@@ -9,21 +9,16 @@ def using_gpu():
 
 def image_data():
     img_3D = tifffile.imread("sim_data/DAPI.tif")
-    images = img_3D[11:15, 512:1024, 512:1024]
+    images = img_3D[13, 512:1024, 512:1024]
     return images
 
+def segment_nuclei(list_of_images):
+    model = models.Cellpose(gpu=using_gpu(), model_type='nuclei')
+    
+    output = model.eval(list_of_images)
+    
+    list_of_masks = output[0]
+    return list_of_masks
 
-# DEFINE CELLPOSE MODEL
-# model_type='cyto' or model_type='nuclei'
-model = models.Cellpose(gpu=using_gpu(), model_type='nuclei')
-
-# diameter of the nucleus
-diameter_of_nucleus = 150
-
-
-images = image_data()
-
-images = [images[2]]
-
-params = model.eval(images, diameter=diameter_of_nucleus)
-tifffile.imsave("masks.tiff", params[0])
+list_of_images = [image_data()]
+list_of_masks = segment_nuclei(list_of_images)
