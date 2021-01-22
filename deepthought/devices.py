@@ -114,7 +114,7 @@ class SimMMC:
         self.pos = 0
         self.xy = [0, 0]
         self.exposure_time = 0.1
-        self.data = io.imread("sim_data/DAPI.tif")[13]
+        self.data = io.imread("sim_data/DAPI.tif")
 
     def getCameraDevice(self):
         return "SimCamera"
