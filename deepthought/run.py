@@ -8,6 +8,7 @@ from configs import config
 from detection import detect_object
 from viz import imshow
 
+
 bec = BestEffortCallback()
 bec.disable_plots()
 
@@ -32,5 +33,6 @@ header = db[-1]
 data = header.data("camera")
 img = next(data)
 (_, label) = detect_object(img)
+stage_coords = [1242, -1012]
 
-imshow(img, label)
+imshow(img, label, stage_coords)

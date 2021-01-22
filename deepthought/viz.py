@@ -37,40 +37,47 @@ def circularity(perimeter, area):
     return circularity
 
 
+def transform_xy(x, y, stage_coords):
+    stage_coords = np.array(stage_coords)
+
+    x = np.around(x + stage_coords[0])
+    y = np.around(y + stage_coords[1])
+    
+
+    return list(zip(x, y))
 
 
-def imshow(image, label_image=None):
+def imshow(image, label_image, stage_coords):
     with napari.gui_qt():
         viewer = napari.view_image(image, name="image at x,y")
 
-        if label_image is not None:
-            viewer.add_labels(label_image)
+        viewer.add_labels(label_image, visible=False)
+    
+        # create the properties dictionary
+        properties = measure.regionprops_table(
+            label_image, properties=('label', 'bbox', 'perimeter', 'area', 'centroid')
+        )
+        properties['circularity'] = circularity(
+            properties['perimeter'], properties['area']
+        )
+        properties['xy'] = transform_xy(properties['centroid-0'], properties['centroid-1'], stage_coords)
+        # create the bounding box rectangles
+        bbox_rects = make_bbox([properties[f'bbox-{i}'] for i in range(4)])
+
+        # specify the display parameters for the text
+        text_parameters = {
+            'text': 'label: {label}\nxy: {xy}\ncirc: {circularity:.2f}',
+            'size': 12,
+            'color': 'green',
+            'anchor': 'upper_left',
+            'translation': [-3, 0],
+        }
         
-            # create the properties dictionary
-            properties = measure.regionprops_table(
-                label_image, properties=('label', 'bbox', 'perimeter', 'area')
-            )
-            properties['circularity'] = circularity(
-                properties['perimeter'], properties['area']
-            )
-
-            # create the bounding box rectangles
-            bbox_rects = make_bbox([properties[f'bbox-{i}'] for i in range(4)])
-
-            # specify the display parameters for the text
-            text_parameters = {
-                'text': 'label: {label}\ncirc: {circularity:.2f}',
-                'size': 12,
-                'color': 'green',
-                'anchor': 'upper_left',
-                'translation': [-3, 0],
-            }
-            
-            shapes_layer = viewer.add_shapes(
-                bbox_rects,
-                face_color='transparent',
-                edge_color='green',
-                properties=properties,
-                text=text_parameters,
-                name='bounding box',
-            )
+        shapes_layer = viewer.add_shapes(
+            bbox_rects,
+            face_color='transparent',
+            edge_color='green',
+            properties=properties,
+            text=text_parameters,
+            name='bounding box',
+        )
