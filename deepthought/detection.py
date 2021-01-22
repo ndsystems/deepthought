@@ -1,6 +1,6 @@
 import tifffile
 from cellpose import models
-from skimage import measure
+
 
 def segment_nuclei(image):
     """Segment nuclei from image using cellpose and return the mask"""
@@ -12,10 +12,9 @@ def segment_nuclei(image):
     return list_of_masks[0]
 
 
-def detect(image, kind="dapi"):
+def detect_object(image, kind="dapi"):
     if kind == "dapi":
         seg_func = segment_nuclei
     
     label_ = seg_func(image)
-    regions = measure.regionprops(label_, intensity_image=image)
-    return (image, label_), regions
+    return (image, label_)

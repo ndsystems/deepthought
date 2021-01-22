@@ -5,7 +5,7 @@ from bluesky.callbacks.best_effort import BestEffortCallback
 from devices import Camera, Focus, SimMMC
 from comms import client
 from configs import config
-from segmentation import segment_nuclei
+from detection import detect_object
 from viz import imshow
 
 bec = BestEffortCallback()
@@ -31,6 +31,6 @@ header = db[-1]
 
 data = header.data("camera")
 img = next(data)
-label = segment_nuclei(img)
-imshow(img, label)
+(_, label) = detect_object(img)
 
+imshow(img, label)
