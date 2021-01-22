@@ -12,15 +12,14 @@ def sim_image_data():
     images = img_3D[13, 512:1024, 512:1024]
     return images
 
-def segment_nuclei(list_of_images):
+def segment_nuclei(image):
     # segment the list of images with cellpose and return the labeled image
     model = models.Cellpose(gpu=1, model_type='nuclei')
     
-    output = model.eval(list_of_images)
+    output = model.eval([image])
     
     list_of_masks = output[0]
-    return list_of_masks
+    return list_of_masks[0]
 
 if __name__ == "__main__":
-    list_of_images = [sim_image_data()]
-    list_of_masks = segment_nuclei(list_of_images)
+    mask = segment_nuclei(sim_image_data())
