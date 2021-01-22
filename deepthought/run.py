@@ -22,12 +22,15 @@ motor = Focus(mmc)
 RE = RunEngine({})
 RE.subscribe(bec)
 RE.subscribe(db.insert)
-RE(count([cam], num=10, delay=3))
+RE(count([cam], num=1))
 
 
 # to access the data, get the header object (of databroker)
 # and access the data of camera
 header = db[-1]
+
 data = header.data("camera")
-for _ in data:
-    print(_)
+img = next(data)
+label = segment_nuclei(img)
+imshow(img, label)
+
