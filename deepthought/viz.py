@@ -1,6 +1,8 @@
 import napari
 
-def imshow(image):
+def imshow(image, label=None):
     with napari.gui_qt():
-        self.viewer = napari.Viewer()
-        self.viewer.add_image(image)
+        viewer = napari.view_image(image, name="image at x,y")
+
+        if label is not None:
+            viewer.add_labels(label)
