@@ -38,6 +38,8 @@ def circularity(perimeter, area):
 
 
 def transform_xy(x, y, stage_coords):
+    # currently this does not really transform the coordinate system
+
     stage_coords = np.array(stage_coords)
 
     x = np.around(x + stage_coords[0])
@@ -49,9 +51,9 @@ def transform_xy(x, y, stage_coords):
 
 def imshow(image, label_image, stage_coords):
     with napari.gui_qt():
-        viewer = napari.view_image(image, name="image at x,y")
+        viewer = napari.view_image(image, name="DAPI")
 
-        viewer.add_labels(label_image, visible=False)
+        viewer.add_labels(label_image, visible=False, name="segments")
     
         # create the properties dictionary
         properties = measure.regionprops_table(
@@ -79,5 +81,6 @@ def imshow(image, label_image, stage_coords):
             edge_color='green',
             properties=properties,
             text=text_parameters,
-            name='bounding box',
+            name='properties',
+            visible=False
         )
