@@ -14,7 +14,7 @@ bec.disable_plots()
 
 db = Broker.named('temp')
 
-# mmc = client(**config["mm_server"]).mmc
+# mmc = client(addr="10.10.1.62", port=18861).mmc
 mmc = SimMMC()
 
 cam = Camera(mmc)
@@ -23,16 +23,23 @@ motor = Focus(mmc)
 RE = RunEngine({})
 RE.subscribe(bec)
 RE.subscribe(db.insert)
-RE(count([cam], num=1))
+
+from magicgui import magicgui
+
+# decorate your function with the @magicgui decorator
+@magicgui(call_button="snap", result_widget=False)
+def snap():
+    RE(count([cam], num=1))
+    # to access the data, get the header object (of databroker)
+    # and access the data of camera
+    header = db[-1]
+
+    data = header.data("camera")
+    img = next(data)
+    (_, label) = detect_object(img, kind="dapi")
+    stage_coords = mmc.getXYPosition()
+    
+    imshow(img, label, stage_coords)
 
 
-# to access the data, get the header object (of databroker)
-# and access the data of camera
-header = db[-1]
-
-data = header.data("camera")
-img = next(data)
-(_, label) = detect_object(img)
-stage_coords = [1242, -1012]
-
-imshow(img, label, stage_coords)
+snap.show(run=True)
