@@ -19,6 +19,8 @@ INSTALL_REQUIRES = [
     "ophyd==1.6.0",
     "bluesky==1.6.7",
     "databroker==1.2.0",
+    "magicgui==0.2.5",
+    "PyQt5>=5.12.3,!=5.15.0",
     "napari==0.4.3",
 ]
 DOCS = [
