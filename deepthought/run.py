@@ -27,7 +27,7 @@ RE.subscribe(db.insert)
 from magicgui import magicgui
 
 # decorate your function with the @magicgui decorator
-@magicgui(call_button="snap", result_widget=False)
+@magicgui(call_button="snap", result_widget=True)
 def snap():
     RE(count([cam], num=1))
     # to access the data, get the header object (of databroker)
@@ -40,6 +40,5 @@ def snap():
     stage_coords = mmc.getXYPosition()
     
     imshow(img, label, stage_coords)
-
 
 snap.show(run=True)
