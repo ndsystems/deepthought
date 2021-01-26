@@ -1,7 +1,21 @@
-deepthought
---
-This is the client side application which can connect to [`hard-link`](https://github.com/ndsystems/hard-link) to get live-data from the microscope.
+# deepthought
 
-how to run
---
-`$ python -i run.py`
+This is the client side application which can connect to
+[`hard-link`](https://github.com/ndsystems/hard-link) to get live-data from the
+microscope.
+
+## How to install
+
+1. You could optionally use a virtual environment.
+```
+$ python -m pip install virtualenv
+$ python -m virtualenv deepthought
+$ source deepthought/bin/activate
+$ python -m pip install -U pip
+```
+2. Install with:
+`$ python -m pip install -e .`
+
+## How to run
+
+`$ python run.py`

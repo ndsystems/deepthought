@@ -1,18 +1,19 @@
-from bluesky.plans import scan, count
 from bluesky import RunEngine
-from databroker import Broker
 from bluesky.callbacks.best_effort import BestEffortCallback
-from devices import Camera, Focus, SimMMC
+from bluesky.plans import count, scan
+from databroker import Broker
+from magicgui import magicgui
+
 from comms import client
 from configs import config
 from detection import detect_object
+from devices import Camera, Focus, SimMMC
 from viz import imshow
-
 
 bec = BestEffortCallback()
 bec.disable_plots()
 
-db = Broker.named('temp')
+db = Broker.named("temp")
 
 # mmc = client(addr="10.10.1.62", port=18861).mmc
 mmc = SimMMC()
@@ -24,7 +25,6 @@ RE = RunEngine({})
 RE.subscribe(bec)
 RE.subscribe(db.insert)
 
-from magicgui import magicgui
 
 # decorate your function with the @magicgui decorator
 @magicgui(call_button="snap", result_widget=True)
@@ -38,7 +38,7 @@ def snap():
     img = next(data)
     (_, label) = detect_object(img, kind="dapi")
     stage_coords = mmc.getXYPosition()
-    
+
     imshow(img, label, stage_coords)
 
 snap.show(run=True)
