@@ -16,4 +16,4 @@ microscope.
 
 ## How to run
 
-`$ python -i run.py`
+`$ python run.py`
