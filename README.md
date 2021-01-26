@@ -19,3 +19,7 @@ $ python -m pip install -U pip
 ## How to run
 
 `$ python run.py`
+
+## Troubleshooting
+
+1. If you have `llvm11`, you might get error. Go back to `llvm10`.
