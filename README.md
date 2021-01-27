@@ -22,4 +22,4 @@ $ python -m pip install -U pip
 
 ## Troubleshooting
 
-1. If you have `llvm11`, you might get error. Go back to `llvm10`.
+1. If you have `llvm11`, you might get an error while installing `llvmlite`, which is required by `numba`. Go back to `llvm10`.
