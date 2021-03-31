@@ -1,13 +1,25 @@
-The task of a microscopy user is to observe their sample and arrive at meaningful conclusions. However, in the current tools, the user has to pass thru many hurdles before meaningful information of their sample is obtained and stored. We aim to create an easy and efficient system for a researcher to carry out experiments, manage projects, instrument time, or share data with others.
+# deepthought
 
-deepthought
---
-deepthought is a software suite that builds on top of device abstraction, experiment orchestration and object detection to present multi-dimensional online information of the sample to the user.
- 
-project evolution tools
---
-In the lab, projects and experiments evolve with time. There exists relationships between experiments carried out on different days. This information is unstructured, and structuring it can help manage lab activities better. With user management and collaboration tools, projects can be shared with different users to initiate discussions.
+This is the client side application which can connect to
+[`hard-link`](https://github.com/ndsystems/hard-link) to get live-data from the
+microscope.
 
-object representation of the sample
---
+## How to install
 
+1. You could optionally use a virtual environment.
+```
+$ python -m pip install virtualenv
+$ python -m virtualenv deepthought
+$ source deepthought/bin/activate
+$ python -m pip install -U pip
+```
+2. Install with:
+`$ python -m pip install -e .`
+
+## How to run
+
+`$ python run.py`
+
+## Troubleshooting
+
+1. If you have `llvm11`, you might get an error while installing `llvmlite`, which is required by `numba`. Go back to `llvm10`.
