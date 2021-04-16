@@ -29,10 +29,7 @@ def detect_object(image, kind="dapi"):
         seg_func = segment_cyto
     
     if image.shape[0] > 1:
-        labels_ = []
-        for img in image:
-            labels_.append(seg_func(img))
-        labels_ = np.array(labels_)
+        labels_ = np.array([seg_func(img) for img in image])
         
         return (image, labels_)
 
