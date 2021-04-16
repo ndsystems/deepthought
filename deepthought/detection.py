@@ -1,6 +1,6 @@
+import numpy as np
 import tifffile
 from cellpose import models
-import numpy as np
 
 
 def segment_nuclei(image):

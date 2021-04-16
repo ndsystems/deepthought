@@ -74,14 +74,16 @@ Notes
 
 """
 
-from devices import Camera, Focus
-# other devices have to be added.
-# to figure out where 
-
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky.plans import count, scan
 from databroker import Broker
+
+from devices import Camera, Focus
+
+# other devices have to be added.
+# to figure out where 
+
 
 bec = BestEffortCallback()
 bec.disable_plots()

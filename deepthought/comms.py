@@ -2,6 +2,7 @@
 import rpyc
 from rpyc.utils.server import ThreadedServer
 
+
 def server(object_, port, *args, **kwargs):
     s = ThreadedServer(object_, hostname="", port=port, auto_register=None,
                          protocol_config={"allow_all_attrs": True, 

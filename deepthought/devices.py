@@ -7,17 +7,15 @@ References:
 2. https://github.com/SEBv15/GSD192-tools
 """
 
-import time
 import threading
-from typing import Dict, List, Any, TypeVar, Tuple
-
-
-from collections import OrderedDict 
+import time
+from collections import OrderedDict
+from typing import Any, Dict, List, Tuple, TypeVar
 
 import numpy as np
+from ophyd.status import Status
 from skimage import io
 
-from ophyd.status import Status
 
 class BaseScope:
     def __init__(self, mmc):
