@@ -1,5 +1,6 @@
 import tifffile
 from cellpose import models
+import numpy as np
 
 
 def segment_nuclei(image):
@@ -27,5 +28,13 @@ def detect_object(image, kind="dapi"):
     elif kind == "cyto":
         seg_func = segment_cyto
     
+    if image.shape[0] > 1:
+        labels_ = []
+        for img in image:
+            labels_.append(seg_func(img))
+        labels_ = np.array(labels_)
+        
+        return (image, labels_)
+
     label_ = seg_func(image)
     return (image, label_)
