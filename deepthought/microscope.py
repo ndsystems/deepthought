@@ -78,12 +78,33 @@ from devices import Camera, Focus
 # other devices have to be added.
 # to figure out where 
 
+from bluesky import RunEngine
+from bluesky.callbacks.best_effort import BestEffortCallback
+from bluesky.plans import count, scan
+from databroker import Broker
+
+bec = BestEffortCallback()
+bec.disable_plots()
+
+db = Broker.named("temp")
+
+
+RE = RunEngine({})
+RE.subscribe(bec)
+RE.subscribe(db.insert)
 
 class Microscope:
-    def __init__(self):
+    def __init__(self, mmc):
         self.name = None
+        self.mmc = mmc
+        self._cam = [Camera(mmc)]
+        self.z = Focus(mmc)
+        self.xy = None
 
-    def snap(self):
-        # run a blue sky count method with detector
-        pass
+    def snap(self, num=1, delay=0):
+        # run a blue sky count method with cameras
+        # return uid
+        uid, = RE(count(self._cam, num=num, delay=None))
+        header =  db[uid]
+        return header
 
