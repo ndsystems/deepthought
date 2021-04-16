@@ -107,6 +107,14 @@ def random_crop(image, size=512):
     return cropped_image
 
 
+def frame_crop(image, size=512, tol=100):
+    """generate a random crop of the image for the given size"""
+    error = np.random.randint(0, tol)
+    x, y = 150, 250
+    cropped_image = image[x+error:x+size+error, y+error:y+size+error]
+    return cropped_image
+
+
 class SimMMC:
     """This is a simulated microscope that returns a 512x512
     image."""
@@ -146,7 +154,7 @@ class SimMMC:
         return
 
     def getImage(self):
-        return random_crop(self.data)
+        return frame_crop(self.data)
 
 
 class Focus:
