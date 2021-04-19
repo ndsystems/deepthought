@@ -274,3 +274,16 @@ class Camera:
 
     def read_configuration(self) -> OrderedDict:
         return OrderedDict()
+
+
+class Stage:
+    name = "stage"
+    parent = None
+    
+
+    def __init__(self, mmc):
+        self.mmc = mmc
+        x = None
+        y = None
+        z = None
+ 
