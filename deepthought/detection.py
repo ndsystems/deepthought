@@ -31,7 +31,7 @@ def detect_object(image, kind="dapi"):
     if image.shape[0] > 1:
         labels_ = np.array([seg_func(img) for img in image])
         
-        return (image, labels_)
+        return labels_
 
     label_ = seg_func(image)
-    return (image, label_)
+    return label_
