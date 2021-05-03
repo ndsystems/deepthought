@@ -15,6 +15,11 @@ from typing import Any, Dict, List, Tuple, TypeVar
 import numpy as np
 from ophyd.status import Status
 from ophyd import Signal
+from ophyd import (Component as Cpt)
+from ophyd import (PseudoPositioner, PseudoSingle)
+from ophyd.pseudopos import (pseudo_position_argument,
+                             real_position_argument)
+
 from skimage import io
 
 
@@ -285,15 +290,79 @@ class XYStage:
     def __init__(self, mmc):
         self.mmc = mmc
         self.mmc_device_name = self.mmc.getXYStageDevice()
-        self.get()
 
-    def get(self, **kwargs):
-        '''The readback value'''
-        self._readback = self.mmc.getXYPosition()
-        return self._readback
+
+    def trigger(self):
+            status = Status(obj=self, timeout=10)
+            
+            def wait():
+                try:
+                    self.mmc.waitForDevice(self.mmc_device_name)
+                except Exception as exc:
+                    status.set_exception(exc)
+                else:
+                    status.set_finished()
+
+            threading.Thread(target=wait).start()
+            return status
+
+    def read(self):
+        data = OrderedDict()
+        data['xy'] = {'value': self.mmc.getXYPosition(), 'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['xy'] = {'source': "MMCore", 
+                     'dtype': "number",
+                     'shape' : []}
+        return data                          
+                          
     
     def set(self, value):
-        self.mmc.setXYPosition(*value)
-        self.mmc.waitForDevice(self.mmc_device_name)
-        self.get()
- 
+        status = Status(obj=self, timeout=5)
+        def wait():
+            try:
+                self.mmc.setXYPosition(*value)
+                self.mmc.waitForDevice(self.mmc_device_name)
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+
+class Stage(PseudoPositioner):    
+    # The pseudo positioner axes:
+    px = Cpt(PseudoSingle)
+    py = Cpt(PseudoSingle)    
+    
+    # The real (or physical) positioners:
+    rxy = Cpt(XYStage, self.mmc)  # FIXME:    
+    
+    def __init__(self, prefix='', mmc=None, *, **kwargs):
+        if mmc is None:
+            raise ValueError("Must supply the 'mmc' object.")
+        self.mmc = mmc        
+        
+        # now, tell the PseudoPositioner to construct itself
+        super().__init__(prefix=prefix, **kwargs)
+
+    @pseudo_position_argument
+    def forward(self, pseudo_pos):
+        '''Run a forward (pseudo -> real) calculation'''
+        return self.RealPosition(rxy=(pseudo_pos.px, pseudo_pos.py))
+    @real_position_argument
+    def inverse(self, real_pos):
+        '''Run an inverse (real -> pseudo) calculation'''
+        return self.PseudoPosition(px=real_pos.rxy[0],
+                                   py=real_pos.rxy[1])
