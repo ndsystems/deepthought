@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Tuple, TypeVar
 
 import numpy as np
 from ophyd.status import Status
+from ophyd import Signal
 from skimage import io
 
 
@@ -218,6 +219,7 @@ class Focus:
 class Camera:
     name = "camera"
     parent = None
+    exposure_time = None
 
     def __init__(self, mmc):
         self.mmc = mmc
@@ -276,14 +278,22 @@ class Camera:
         return OrderedDict()
 
 
-class Stage:
-    name = "stage"
+class XYStage:
+    name = "xy"
     parent = None
-    
 
     def __init__(self, mmc):
         self.mmc = mmc
-        x = None
-        y = None
-        z = None
+        self.mmc_device_name = self.mmc.getXYStageDevice()
+        self.get()
+
+    def get(self, **kwargs):
+        '''The readback value'''
+        self._readback = self.mmc.getXYPosition()
+        return self._readback
+    
+    def set(self, value):
+        self.mmc.setXYPosition(*value)
+        self.mmc.waitForDevice(self.mmc_device_name)
+        self.get()
  
