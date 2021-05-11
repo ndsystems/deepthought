@@ -281,9 +281,14 @@ class Camera:
             self.mmc.setProperty(cam_name, prop, values[idx])
             return self.mmc.getProperty(cam_name, prop)
 
+        def configure_channel(channel):
+            self.mmc.setConfig("channel", channel)
+            return channel
+
         print(configure_cam("Binning", -1))
         print(configure_cam("PixelReadoutRate", 0))
         print(configure_cam("Sensitivity/DynamicRange", 0))
+        print(configure_channel("DAPI"))
 
     def read(self) -> OrderedDict:
         data = OrderedDict()
