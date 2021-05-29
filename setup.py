@@ -10,18 +10,19 @@ DOWNLOAD_URL = "{}/releases/tag/v{}".format(PROJECT_URL, VERSION)
 with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()
 
+# Had to change versions of some libs and also removed version requirements for some others. 
 INSTALL_REQUIRES = [
     "rpyc==5.0.1",
-    "tifffile==2020.12.8",
+    "tifffile>=2020.9.3",
     "cellpose==0.6",
     "numpy>=1.19.4",
-    "scikit-image>=0.18.1",
+    "scikit-image>=0.17.2",
     "ophyd==1.6.0",
     "bluesky==1.6.7",
     "databroker==1.2.0",
-    "magicgui==0.2.5",
+    "magicgui",
     "PyQt5>=5.12.3,!=5.15.0",
-    "napari==0.4.3",
+    "napari",
 ]
 DOCS = [
     "recommonmark",
