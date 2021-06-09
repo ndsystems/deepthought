@@ -46,13 +46,15 @@ def transform_xy(x, y, stage_coords):
 
     return list(zip(x, y))
 
-def imshow(image, label_image=None, *args, **kwargs):
+
+def imshow(image=None, label=None, *args, **kwargs):
+
     with napari.gui_qt():
         viewer = napari.view_image(image, name="image")
 
-        if label_image is not None:
+        if label is not None:
             print("here")
-            viewer.add_labels(label_image, visible=False, name="segments")
+            viewer.add_labels(label, visible=False, name="segments")
 
 
 def imshow_sp(image, label_image, stage_coords):

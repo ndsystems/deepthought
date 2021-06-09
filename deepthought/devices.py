@@ -173,6 +173,12 @@ class SimMMC:
     def getImage(self):
         return frame_crop(self.data)
 
+    def setCameraDevice(self, cam):
+        self.cam_device = cam
+
+    def getAllowedPropertyValues(self):
+        pass
+
 
 class Focus:
     name = "z"
@@ -237,14 +243,15 @@ class Focus:
 class Camera:
     name = "camera"
     parent = None
-    exposure_time = None
 
     def __init__(self, mmc):
         self.mmc = mmc
+        self.cam_name = "right_port"
+        # self.configure()
+
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 
         self.image = None
-        self.configure()
         self._subscribers = []
 
     def _collection_callback(self):
@@ -273,22 +280,24 @@ class Camera:
 
         return status
 
+    def set_property(self, prop, idx):
+        values = self.mmc.getAllowedPropertyValues(self.cam_name, prop)
+        self.mmc.setProperty(self.cam_name, prop, values[idx])
+        return self.mmc.getProperty(self.cam_name, prop)
+
+    def set_channel(self, channel):
+        self.mmc.setConfig("channel", channel)
+        return f"{channel}"
+
+    def set_exposure(self, exposure_time):
+        self.mmc.setExposure(exposure_time)
+        return self.mmc.getExposure()
+
     def configure(self):
-        cam_name = self.mmc.getCameraDevice()
-
-        def configure_cam(prop, idx):
-            values = self.mmc.getAllowedPropertyValues(cam_name, prop)
-            self.mmc.setProperty(cam_name, prop, values[idx])
-            return self.mmc.getProperty(cam_name, prop)
-
-        def configure_channel(channel):
-            self.mmc.setConfig("channel", channel)
-            return channel
-
-        print(configure_cam("Binning", -1))
-        print(configure_cam("PixelReadoutRate", 0))
-        print(configure_cam("Sensitivity/DynamicRange", 0))
-        print(configure_channel("DAPI"))
+        self.mmc.setCameraDevice(self.cam_name)
+        print(self.set_property("Binning", -1))
+        print(self.set_property("PixelReadoutRate", 0))
+        print(self.set_property("Sensitivity/DynamicRange", 0))
 
     def read(self) -> OrderedDict:
         data = OrderedDict()

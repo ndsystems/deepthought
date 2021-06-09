@@ -10,10 +10,11 @@ import numpy as np
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky.plans import count, scan, spiral_square
-from databroker import Broker
 from configs import store_disk
 from devices import Camera, Focus, TwoD_XY_StagePositioner, get_mmc
-
+from compute import axial_length
+from bluesky.callbacks.broker import post_run
+from data import db
 # other devices have to be added.
 # to figure out where
 
@@ -21,53 +22,62 @@ from devices import Camera, Focus, TwoD_XY_StagePositioner, get_mmc
 bec = BestEffortCallback()
 bec.disable_plots()
 
-db = Broker.named("temp")
-
-
 RE = RunEngine({})
 RE.subscribe(bec)
 RE.subscribe(db.insert)
 
-if store_disk:
-    from bluesky.callbacks.broker import LiveTiffExporter
+# if store_disk:
+#     from bluesky.callbacks.broker import LiveTiffExporter
 
-    template = "output_dir/{start[scan_id]}/{event[seq_num]}.tiff"
-    live = LiveTiffExporter("camera",
-                            template=template,
-                            db=db,
-                            overwrite=True)
-    RE.subscribe(live)
+#     template = "output_dir/{start[scan_id]}/{event[seq_num]}.tiff"
+#     live = LiveTiffExporter("camera",
+#                             template=template,
+#                             db=db,
+#                             overwrite=True)
+#     RE.subscribe(live)
 
 
 class Microscope:
     def __init__(self):
         self.name = None
         self.mmc = get_mmc()
-        self._cam = [Camera(self.mmc)]
+        self._cam = Camera(self.mmc)
         self.z = Focus(self.mmc)
         self.stage = TwoD_XY_StagePositioner("", name="xy_stage")
 
-    def snap(self, num=1, delay=0):
+    def snap(self, num=1, delay=0, channel=None, exposure=None):
         # run a blue sky count method with cameras
         # return uid
-        uid, = RE(count(self._cam, num=num, delay=delay))
 
-        # https://nsls-ii.github.io/databroker/generated/databroker.Header.table.html#databroker.Header.table
-        header = db[uid]
+        if channel is not None:
+            self._cam.set_channel(channel)
 
-        img = np.stack(header.table()["camera"].array)
+        if exposure is not None:
+            self._cam.set_exposure(exposure)
 
-        return img
+        uid, = RE(count([self._cam, self.stage, self.z], num=num, delay=delay))
+        return uid
 
-    def scan(self, center=None, range=None, num=None):
+    def scan(self, channel=None, exposure=None, center=None, num=None):
+        if channel is not None:
+            self._cam.set_channel(channel)
+
+        if exposure is not None:
+            self._cam.set_exposure(exposure)
+
         if center is None:
             center = self.mmc.getXYPosition()
-            x_center, y_center = center
 
-        plan = spiral_square(self._cam, self.stage.x, self.stage.y, x_center=x_center, y_center=y_center,
-                             x_range=1000, y_range=1000, x_num=5, y_num=5)
+        x_center, y_center = center
+
+        if num is None:
+            num = 3
+
+        full_range = num * axial_length()
+
+        plan = spiral_square([self._cam, self.z], self.stage.x, self.stage.y, x_center=x_center, y_center=y_center,
+                             x_range=full_range, y_range=full_range, x_num=num, y_num=num)
 
         uid, = RE(plan)
-        header = db[uid]
-        img = np.stack(header.table()["camera"].array)
-        return img
+
+        return uid
