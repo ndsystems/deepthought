@@ -1,6 +1,5 @@
 from skimage.draw import disk
 import numpy as np
-from microscope import Microscope
 from data import db
 import napari
 from detection import segment, find_object_properties, calculate_stage_coordinates
@@ -224,21 +223,28 @@ class SampleVisualizer:
         rax = plt.axes([0.7, 0.05, 0.15, 0.15], facecolor=axcolor)
 
         radio_y = RadioButtons(
-            ray, ('x', 'y', 'intensity', 'area', 'circ'))
+            ray, ('y', 'x', 'intensity', 'area', 'circ'))
 
         radio_x = RadioButtons(
             rax, ('x', 'y', 'intensity', 'area', 'circ'))
 
+        self.y_option = "y"
+        self.x_option = "x"
+
         def y_selector(label):
-            y_data = self.entities[label]
-            ax.clear()
-            ax.scatter(self.entities.x, y_data, s=1, picker=True)
-            plt.draw()
+            self.y_option = label
+            replot()
 
         def x_selector(label):
-            x_data = self.entities[label]
+            self.x_option = label
+            replot()
+
+        def replot():
             ax.clear()
-            ax.scatter(x_data, self.entities.y, s=1, picker=True)
+            ax.scatter(self.entities[self.x_option],
+                       self.entities[self.y_option], s=1, picker=True)
+            ax.set_xlabel(self.x_option)
+            ax.set_ylabel(self.y_option)
             plt.draw()
 
         radio_y.on_clicked(y_selector)
@@ -261,26 +267,27 @@ class SampleVisualizer:
 
 
 if __name__ == '__main__':
-    # dapi = Channel("DAPI")
-    # dapi.exposure = 30
-    # dapi.model = "nuclei"
+    # currently, it is single tp, fixed cells
+    # we need:
+    # live cell timetraces for objects
+    #   * s-phase biology with HT pcna-cb
 
-    # # currently, it is single tp, fixed cells
-    # # we need:
-    # # live cell timetraces for objects
-    # #   * s-phase biology with HT pcna-cb
+    dapi = Channel("DAPI")
+    dapi.exposure = 30
+    dapi.model = "nuclei"
 
-    # tritc = Channel("TRITC")
-    # tritc.exposure = 100
+    tritc = Channel("TRITC")
+    tritc.exposure = 100
 
-    # center = [-31706.9, -833.0]
+    center = [-31706.9, -833.0]
 
-    # scope = Microscope()
-    # control_1 = SampleConstructor(scope,
-    #                               form=Disk(center=center),
-    #                               channels=[dapi, tritc])
+    # from microscope import Microscope
+    scope = None
+    # control = SampleConstructor(scope,
+    #                             form=Disk(center=center),
+    #                             channels=[dapi, tritc])
 
-    # # control_1.map()
+    # control.map()
 
     s = SampleVisualizer(image_uid="19fc90cf-3701-4bab-a834-17da18297d08",
                          process_uid="bbd8aee0-ea58-4487-a473-a165085133c2")
