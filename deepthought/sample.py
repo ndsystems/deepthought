@@ -6,7 +6,9 @@ import napari
 from detection import segment, find_object_properties, calculate_stage_coordinates
 import matplotlib.pyplot as plt
 from bluesky_live.run_builder import RunBuilder
-from compute import axial_length
+from compute import axial_length, circularity
+from matplotlib.widgets import RadioButtons
+import pandas as pd
 
 
 class FoV:
@@ -30,10 +32,11 @@ class FoV:
         this information can be used by deepthought to choose
         appropriate models for visual processing"""
 
-    def __init__(self, image=None, coords=None, timestamp=None):
+    def __init__(self, image=None, coords=None, timestamp=None, label=None):
         self.image = image
         self.coords = coords
         self.timestamp = timestamp
+        self.label = label
         self.entities = []
 
     def show(self):
@@ -54,8 +57,8 @@ class FoV:
     def make_entities(self):
         self._entities = find_object_properties(self.label, self.image)
 
-        for props in self._entities:
-            entity = Entity(props, self.coords)
+        for properties in self._entities:
+            entity = Entity(properties, self.coords)
             self.entities.append(entity)
 
     def __repr__(self):
@@ -66,29 +69,33 @@ class Entity:
     """A cell or a tissue, which has been identified from an image of
     it, using computer vision"""
 
-    def __init__(self, props, stage_coords):
-        self.props = props
+    def __init__(self, properties, stage_coords):
+        self.properties = properties
         self.stage_coords = stage_coords
-        self.img_to_stage()
+        self.calculate_properties()
+
+        self._data = {"x": self.x,
+                      "y": self.y,
+                      "intensity": self.intensity,
+                      "area": self.area,
+                      "circ": self.circ}
+
+        self.data = pd.Series(data=self._data)
 
     def img_to_stage(self):
-        y, x = self.props.centroid
+        x, y = self.properties.centroid
 
         # stage offset
-        x = x + self.stage_coords[0]
-        y = y + self.stage_coords[1]
+        self.x = x + self.stage_coords[0]
+        self.y = y + self.stage_coords[1]
 
-        self.xy = [x, y]
+        self.xy = [self.x, self.y]
 
-    def aslist(self):
-        return self.xy
-
-    def __iter__(self):
-        return iter(self.aslist())
-
-
-class ExtendedEntity(Entity):
-    pass
+    def calculate_properties(self):
+        self.img_to_stage()
+        self.intensity = np.mean(self.properties.intensity_image)
+        self.area = self.properties.area
+        self.circ = circularity(self.properties.perimeter, self.area)
 
 
 class Disk:
@@ -124,9 +131,6 @@ class SampleConstructor:
         self.fovs = []
         self._map = []
 
-        # temp
-        # self.uid = "cc69f5ef-0904-434b-83ee-b78a85128cc2"
-
     def map(self, *args, **kwargs):
         if self.scope is not None:
             self.generate_fov()  # captures fov, creates self.uid
@@ -143,10 +147,7 @@ class SampleConstructor:
             center=self.form.center, num=self.form.num)
 
     def access_data_header(self):
-        if hasattr(self, "uid"):
-            self.header = db[self.uid]
-        else:
-            self.header = db[-1]
+        self.header = db[self.uid]
 
     @staticmethod
     def set_up_incremental_insert(run):
@@ -186,26 +187,100 @@ class SampleConstructor:
         plt.show()
 
 
+class SampleVisualizer:
+    def __init__(self, image_uid, process_uid):
+        self.image_uid = image_uid
+        self.process_uid = process_uid
+
+        self.image_table = db[self.image_uid].table()
+        self.process_table = db[self.process_uid].table("process")
+
+        self._entities = []
+        self.fov_xy = []
+        self.fovs = []
+
+        for (_, image_row), (_, process_row) in zip(self.image_table.iterrows(), self.process_table.iterrows()):
+            coords = [image_row["xy_stage_x"],
+                      image_row["xy_stage_y"], image_row["z"]]
+            image = image_row["camera"]
+            label = process_row["label"]
+
+            f = FoV(image=image, coords=coords, label=label)
+            self.fovs.append(f)
+
+            f.make_entities()
+            self._entities.extend([_.data for _ in f.entities])
+            self.fov_xy.append(coords[:2])
+
+        self.entities = pd.DataFrame(data=self._entities)
+
+    def plot(self):
+
+        fig, ax = plt.subplots(1)
+        ax.scatter(self.entities.x, self.entities.y, s=1, picker=True)
+
+        axcolor = 'lightgoldenrodyellow'
+        ray = plt.axes([0.05, 0.7, 0.15, 0.15], facecolor=axcolor)
+        rax = plt.axes([0.7, 0.05, 0.15, 0.15], facecolor=axcolor)
+
+        radio_y = RadioButtons(
+            ray, ('x', 'y', 'intensity', 'area', 'circ'))
+
+        radio_x = RadioButtons(
+            rax, ('x', 'y', 'intensity', 'area', 'circ'))
+
+        def y_selector(label):
+            y_data = self.entities[label]
+            ax.clear()
+            ax.scatter(self.entities.x, y_data, s=1, picker=True)
+            plt.draw()
+
+        def x_selector(label):
+            x_data = self.entities[label]
+            ax.clear()
+            ax.scatter(x_data, self.entities.y, s=1, picker=True)
+            plt.draw()
+
+        radio_y.on_clicked(y_selector)
+        radio_x.on_clicked(x_selector)
+
+        # center = [-31706.9, -833.0]
+        # circle = plt.Circle(center, radius=13000/2, fill=False)
+
+        # ax.set_aspect(1)
+        # ax.add_patch(circle)
+
+        # # f_x, f_y = zip(*self.fov_xy)
+        # # ax.scatter(f_x, f_y, s=1, c="r", picker=True)
+
+        # def onpick(evn):
+        #     self.fovs[evn.ind[0]].show()
+
+        # fig.canvas.mpl_connect('pick_event', onpick)
+        plt.show()
+
+
 if __name__ == '__main__':
-    dapi = Channel("DAPI")
-    dapi.exposure = 30
-    dapi.model = "nuclei"
+    # dapi = Channel("DAPI")
+    # dapi.exposure = 30
+    # dapi.model = "nuclei"
 
-    # currently, it is single tp, fixed cells
-    # we need:
-    # live cell timetraces for objects
-    #   * s-phase biology with HT pcna-cb
+    # # currently, it is single tp, fixed cells
+    # # we need:
+    # # live cell timetraces for objects
+    # #   * s-phase biology with HT pcna-cb
 
-    tritc = Channel("TRITC")
-    tritc.exposure = 100
+    # tritc = Channel("TRITC")
+    # tritc.exposure = 100
 
-    center = [-31706.9, -833.0]
+    # center = [-31706.9, -833.0]
 
-    scope = Microscope()
-    control_1 = SampleConstructor(scope,
-                                  form=Disk(center=center),
-                                  channels=[dapi, tritc])
+    # scope = Microscope()
+    # control_1 = SampleConstructor(scope,
+    #                               form=Disk(center=center),
+    #                               channels=[dapi, tritc])
 
-    control_1.map()
+    # # control_1.map()
 
-    # control_2 = SampleConstructor(scope)
+    s = SampleVisualizer(image_uid="19fc90cf-3701-4bab-a834-17da18297d08",
+                         process_uid="bbd8aee0-ea58-4487-a473-a165085133c2")
