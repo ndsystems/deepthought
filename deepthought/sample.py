@@ -80,6 +80,7 @@ class Entity:
                       "circ": self.circ}
 
         self.data = pd.Series(data=self._data)
+        # self.id = unique()
 
     def img_to_stage(self):
         x, y = self.properties.centroid
@@ -101,9 +102,10 @@ class Disk:
     def __init__(self, center):
         self.center = center
         self.diameter = 13 * 1000  # mm - > um
+
         self.rr, self.cc = disk(self.center, self.diameter/2)
         self.coords = [self.rr, self.cc]
-        self.num = int(self.diameter / axial_length())
+        self.num = 3  # int(self.diameter / axial_length())
 
 
 class Channel:
@@ -186,13 +188,79 @@ class SampleConstructor:
         plt.show()
 
 
+class SelectFromCollection:
+    """
+    Select indices from a matplotlib collection using `LassoSelector`.
+
+    Selected indices are saved in the `ind` attribute. This tool fades out the
+    points that are not part of the selection (i.e., reduces their alpha
+    values). If your collection has alpha < 1, this tool will permanently
+    alter the alpha values.
+
+    Note that this tool selects collection objects based on their *origins*
+    (i.e., `offsets`).
+
+    Parameters
+    ----------
+    ax : `~matplotlib.axes.Axes`
+        Axes to interact with.
+    collection : `matplotlib.collections.Collection` subclass
+        Collection you want to select from.
+    alpha_other : 0 <= float <= 1
+        To highlight a selection, this tool sets all selected points to an
+        alpha value of 1 and non-selected points to *alpha_other*.
+    """
+
+    def __init__(self, ax, collection, alpha_other=0.3):
+        self.canvas = ax.figure.canvas
+        self.collection = collection
+        self.alpha_other = alpha_other
+
+        self.xys = collection.get_offsets()
+        self.Npts = len(self.xys)
+
+        # Ensure that we have separate colors for each object
+        self.fc = collection.get_facecolors()
+        if len(self.fc) == 0:
+            raise ValueError('Collection must have a facecolor')
+        elif len(self.fc) == 1:
+            self.fc = np.tile(self.fc, (self.Npts, 1))
+
+        self.lasso = LassoSelector(ax, onselect=self.onselect)
+        self.ind = []
+
+    def onselect(self, verts):
+        path = Path(verts)
+        self.ind = np.nonzero(path.contains_points(self.xys))[0]
+        self.fc[:, -1] = self.alpha_other
+        self.fc[self.ind, -1] = 1
+        self.collection.set_facecolors(self.fc)
+        self.canvas.draw_idle()
+
+    def disconnect(self):
+        self.lasso.disconnect_events()
+        self.fc[:, -1] = 1
+        self.collection.set_facecolors(self.fc)
+        self.canvas.draw_idle()
+
+
 class SampleVisualizer:
-    def __init__(self, image_uid, process_uid):
+    def __init__(self, image_uid=None, process_uid=None, image_header=None, process_header=None):
+
         self.image_uid = image_uid
         self.process_uid = process_uid
 
-        self.image_table = db[self.image_uid].table()
-        self.process_table = db[self.process_uid].table("process")
+        self.image_header = image_header
+        self.process_header = process_header
+
+        if self.image_uid is not None:
+            self.image_header = db[self.image_uid]
+
+        if self.process_uid is not None:
+            self.process_header = db[self.process_uid]
+
+        self.image_table = self.image_header.table()
+        self.process_table = self.process_header.table("process")
 
         self._entities = []
         self.fov_xy = []
@@ -217,26 +285,27 @@ class SampleVisualizer:
 
         fig, ax = plt.subplots(1)
         ax.scatter(self.entities.x, self.entities.y, s=1, picker=True)
+        ax.set(xlabel="x", ylabel="y")
 
         axcolor = 'lightgoldenrodyellow'
         ray = plt.axes([0.05, 0.7, 0.15, 0.15], facecolor=axcolor)
         rax = plt.axes([0.7, 0.05, 0.15, 0.15], facecolor=axcolor)
 
-        radio_y = RadioButtons(
-            ray, ('y', 'x', 'intensity', 'area', 'circ'))
+        self.x_option = "x"
+        self.y_option = "y"
 
         radio_x = RadioButtons(
-            rax, ('x', 'y', 'intensity', 'area', 'circ'))
+            rax, self.entities.columns.values, active=0)
 
-        self.y_option = "y"
-        self.x_option = "x"
-
-        def y_selector(label):
-            self.y_option = label
-            replot()
+        radio_y = RadioButtons(
+            ray, self.entities.columns.values, active=1)
 
         def x_selector(label):
             self.x_option = label
+            replot()
+
+        def y_selector(label):
+            self.y_option = label
             replot()
 
         def replot():
@@ -247,8 +316,8 @@ class SampleVisualizer:
             ax.set_ylabel(self.y_option)
             plt.draw()
 
-        radio_y.on_clicked(y_selector)
         radio_x.on_clicked(x_selector)
+        radio_y.on_clicked(y_selector)
 
         # center = [-31706.9, -833.0]
         # circle = plt.Circle(center, radius=13000/2, fill=False)
@@ -281,13 +350,24 @@ if __name__ == '__main__':
 
     center = [-31706.9, -833.0]
 
-    # from microscope import Microscope
-    scope = None
-    # control = SampleConstructor(scope,
-    #                             form=Disk(center=center),
-    #                             channels=[dapi, tritc])
+    do_image = False
+    if do_image:
+        from microscope import Microscope
+        scope = Microscope()
 
-    # control.map()
+        timepoints = []
+        for t in range(100):
+            s = SampleConstructor(scope,
+                                  form=Disk(center=center),
+                                  channels=[dapi, tritc])
+            s.map()
+            timepoints.append(s)
+            print(t, len(s._map))
 
-    s = SampleVisualizer(image_uid="19fc90cf-3701-4bab-a834-17da18297d08",
-                         process_uid="bbd8aee0-ea58-4487-a473-a165085133c2")
+    access_test = False
+    if access_test:
+        for i in range(1, 62, 2):
+
+            s = SampleVisualizer(image_header=db[-i - 1],
+                                 process_header=db[-i])
+            s.plot()
