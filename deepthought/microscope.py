@@ -45,7 +45,7 @@ class Microscope:
         self.z = Focus(self.mmc)
         self.stage = TwoD_XY_StagePositioner("", name="xy_stage")
 
-    def snap(self, num=1, delay=0, channel=None, exposure=None):
+    def snap(self, channel=None, exposure=None):
         # run a blue sky count method with cameras
         # return uid
 
@@ -55,7 +55,7 @@ class Microscope:
         if exposure is not None:
             self._cam.set_exposure(exposure)
 
-        uid, = RE(count([self._cam, self.stage, self.z], num=num, delay=delay))
+        uid, = RE(count([self._cam, self.stage, self.z]))
         return uid
 
     def scan(self, channel=None, exposure=None, center=None, num=None):
