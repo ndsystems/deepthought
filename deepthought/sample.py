@@ -105,7 +105,7 @@ class Disk:
 
         self.rr, self.cc = disk(self.center, self.diameter/2)
         self.coords = [self.rr, self.cc]
-        self.num = 3  # int(self.diameter / axial_length())
+        self.num = int(self.diameter / axial_length())
 
 
 class Channel:
@@ -131,6 +131,15 @@ class SampleConstructor:
         self.channels = channels
         self.fovs = []
         self._map = []
+
+    def snap(self):
+        channel = self.channels[0]
+        self.uid = self.scope.snap(
+            channel=channel.name, exposure=channel.exposure)
+
+        self.access_data_header()
+        self.create_fov_from_table()
+        self.process_fov()
 
     def map(self, *args, **kwargs):
         if self.scope is not None:
@@ -284,6 +293,7 @@ class SampleVisualizer:
     def plot(self):
 
         fig, ax = plt.subplots(1)
+        ax.set_title(f"N={self.entities.shape[0]}")
         ax.scatter(self.entities.x, self.entities.y, s=1, picker=True)
         ax.set(xlabel="x", ylabel="y")
 
@@ -319,55 +329,59 @@ class SampleVisualizer:
         radio_x.on_clicked(x_selector)
         radio_y.on_clicked(y_selector)
 
-        # center = [-31706.9, -833.0]
-        # circle = plt.Circle(center, radius=13000/2, fill=False)
+        plt.show()
 
-        # ax.set_aspect(1)
-        # ax.add_patch(circle)
+    def show_map(self):
+        center = [-31706.9, -833.0]
+        circle = plt.Circle(center, radius=13000/2, fill=False)
 
-        # # f_x, f_y = zip(*self.fov_xy)
-        # # ax.scatter(f_x, f_y, s=1, c="r", picker=True)
+        fig, ax = plt.subplots(1)
 
-        # def onpick(evn):
-        #     self.fovs[evn.ind[0]].show()
+        ax.set_title(f"N={self.entities.shape[0]}")
+        ax.scatter(self.entities.x, self.entities.y, s=1, picker=True)
+        ax.set(xlabel="x", ylabel="y")
 
-        # fig.canvas.mpl_connect('pick_event', onpick)
+        ax.set_aspect(1)
+        ax.add_patch(circle)
+
+        f_x, f_y = zip(*self.fov_xy)
+        ax.scatter(f_x, f_y, s=1, c="r", picker=True)
+
+        def onpick(evn):
+            self.fovs[evn.ind[0]].show()
+
+        fig.canvas.mpl_connect('pick_event', onpick)
+
         plt.show()
 
 
-if __name__ == '__main__':
-    # currently, it is single tp, fixed cells
-    # we need:
-    # live cell timetraces for objects
-    #   * s-phase biology with HT pcna-cb
+class SampleHandler(SampleVisualizer):
+    def compute_fovs(self):
+        """Given a set of points, calculate the coordinates for imaging FoVs"""
+        coords = self.entities[["x", "y"]]
 
-    dapi = Channel("DAPI")
-    dapi.exposure = 30
-    dapi.model = "nuclei"
+
+if __name__ == '__main__':
+    # live cell timetraces of pcna-chromobody expressing HeLa cells.
 
     tritc = Channel("TRITC")
-    tritc.exposure = 100
+    tritc.exposure = 200
+    tritc.model = "nuclei"
 
     center = [-31706.9, -833.0]
-
+    disk = Disk(center=center)
+    disk.num = 20
     do_image = False
+
     if do_image:
         from microscope import Microscope
         scope = Microscope()
 
-        timepoints = []
-        for t in range(100):
-            s = SampleConstructor(scope,
-                                  form=Disk(center=center),
-                                  channels=[dapi, tritc])
-            s.map()
-            timepoints.append(s)
-            print(t, len(s._map))
+        s = SampleConstructor(scope,
+                              form=disk,
+                              channels=[tritc])
+        s.map()
 
-    access_test = False
-    if access_test:
-        for i in range(1, 62, 2):
-
-            s = SampleVisualizer(image_header=db[-i - 1],
-                                 process_header=db[-i])
-            s.plot()
+    v = SampleVisualizer(image_header=db[-2],
+                         process_header=db[-1])
+    v.plot()
