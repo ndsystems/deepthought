@@ -8,6 +8,10 @@ from bluesky_live.run_builder import RunBuilder
 from compute import axial_length, circularity
 from matplotlib.widgets import RadioButtons
 import pandas as pd
+import logging
+from tqdm import tqdm
+logger = logging.getLogger()
+logger.disabled = True
 
 
 class FoV:
@@ -172,7 +176,7 @@ class SampleConstructor:
 
             # self.set_up_incremental_insert(run)
 
-            for fov in self.fovs:
+            for fov in tqdm(self.fovs):
                 fov.detect()
                 builder.add_data("process", data={'label': [fov.label]})
                 self._map.extend(fov.entities)
@@ -365,13 +369,13 @@ if __name__ == '__main__':
     # live cell timetraces of pcna-chromobody expressing HeLa cells.
 
     tritc = Channel("TRITC")
-    tritc.exposure = 200
+    tritc.exposure = 300
     tritc.model = "nuclei"
 
     center = [-31706.9, -833.0]
     disk = Disk(center=center)
     disk.num = 20
-    do_image = False
+    do_image = True
 
     if do_image:
         from microscope import Microscope
@@ -381,7 +385,8 @@ if __name__ == '__main__':
                               form=disk,
                               channels=[tritc])
         s.map()
-
+    import time
+    time.sleep(10)
     v = SampleVisualizer(image_header=db[-2],
                          process_header=db[-1])
     v.plot()

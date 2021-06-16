@@ -295,7 +295,7 @@ class Camera:
 
     def configure(self):
         self.mmc.setCameraDevice(self.cam_name)
-        print(self.set_property("Binning", -1))
+        print(self.set_property("Binning", -2))
         print(self.set_property("PixelReadoutRate", 0))
         print(self.set_property("Sensitivity/DynamicRange", 0))
 
