@@ -33,7 +33,7 @@ def unit_pixel_length():
 
 
 def axial_length():
-    number_of_axial_pixels = 512
+    number_of_axial_pixels = 256
 
     total_axial_length = unit_pixel_length() * number_of_axial_pixels
 
