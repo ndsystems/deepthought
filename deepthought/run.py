@@ -1,44 +1,23 @@
-from bluesky import RunEngine
-from bluesky.callbacks.best_effort import BestEffortCallback
-from bluesky.plans import count, scan
-from databroker import Broker
-from magicgui import magicgui
-
-from comms import client
-from configs import config
-from detection import detect_object
-from devices import Camera, Focus, SimMMC
+from microscope import Microscope
+from sample import FoV
 from viz import imshow
 
-bec = BestEffortCallback()
-bec.disable_plots()
+# to do
+# 1. object map
+#   get objects, stage coords for individual images, add offset to them
+#   check FoV
+# 2. map a rectangle with corners defined
+#   use the corner to define a grid for imaging
 
-db = Broker.named("temp")
-
-# mmc = client(addr="10.10.1.62", port=18861).mmc
-mmc = SimMMC()
-
-cam = Camera(mmc)
-motor = Focus(mmc)
-
-RE = RunEngine({})
-RE.subscribe(bec)
-RE.subscribe(db.insert)
+corners = {
+    1: [-36292, -3397],
+    2: [-27397, -3909],
+    3: [-27028, 1683],
+    4: [-36292, 1683]
+}
 
 
-# decorate your function with the @magicgui decorator
-@magicgui(call_button="snap", result_widget=True)
-def snap():
-    RE(count([cam], num=1))
-    # to access the data, get the header object (of databroker)
-    # and access the data of camera
-    header = db[-1]
+# bs - bright star microscope
+bs = Microscope()
 
-    data = header.data("camera")
-    img = next(data)
-    (_, label) = detect_object(img, kind="dapi")
-    stage_coords = mmc.getXYPosition()
-
-    imshow(img, label, stage_coords)
-
-snap.show(run=True)
+uid = bs.snap(num=1)
