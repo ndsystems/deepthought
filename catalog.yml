@@ -1,0 +1,6 @@
+sources:
+  default:
+    driver: "bluesky-msgpack-catalog"
+    args:
+      paths:
+        - "deepthought/deepthought/db_data/*.msgpack"
