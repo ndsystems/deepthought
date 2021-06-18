@@ -1,3 +1,4 @@
+import numpy as np
 import tifffile
 from cellpose import models
 
@@ -27,5 +28,10 @@ def detect_object(image, kind="dapi"):
     elif kind == "cyto":
         seg_func = segment_cyto
     
+    if image.shape[0] > 1:
+        labels_ = np.array([seg_func(img) for img in image])
+        
+        return labels_
+
     label_ = seg_func(image)
-    return (image, label_)
+    return label_
