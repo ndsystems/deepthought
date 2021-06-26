@@ -37,8 +37,10 @@ def get_mmc():
 
 
 class BaseScope:
-    def __init__(self, mmc):
+    def __init__(self, mmc=None):
         self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
 
     def device_properties(self, device):
         """get property names and values for the given device"""
@@ -184,8 +186,10 @@ class Focus:
     name = "z"
     parent = None
 
-    def __init__(self, mmc):
+    def __init__(self, mmc=None):
         self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getFocusDevice()
         self.position = self.mmc.getPosition()
 
@@ -244,10 +248,12 @@ class Camera:
     name = "camera"
     parent = None
 
-    def __init__(self, mmc):
+    def __init__(self, mmc=None):
         self.mmc = mmc
-        self.cam_name = "right_port"
-        # self.configure()
+        if self.mmc is None:
+            self.mmc = get_mmc()
+        self.cam_name = "left_port"
+        self.configure()
 
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 
@@ -326,8 +332,10 @@ class XYStage:
     name = "xy"
     parent = None
 
-    def __init__(self, mmc):
+    def __init__(self, mmc=None):
         self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getXYStageDevice()
 
     def trigger(self):
@@ -385,7 +393,9 @@ class SoftMMCPositioner(SignalPositionerMixin, Signal):
     _move_thread = None
 
     def __init__(self, *args, mmc=None, **kwargs):
-        self.mmc = get_mmc()
+        self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getXYStageDevice()
 
         super().__init__(*args, set_func=self._write_xy, **kwargs)
