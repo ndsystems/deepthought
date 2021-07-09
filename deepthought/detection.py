@@ -1,16 +1,22 @@
-import numpy as np
-from cellpose import models
-from bluesky.callbacks import broker
-from skimage import measure
-from viz import imshow
 from compute import circularity, unit_pixel_length
+from viz import imshow
+from skimage import measure
+from bluesky.callbacks import broker
+from cellpose import models
+import numpy as np
+import logging
+logging.getLogger("cellpose").setLevel(logging.WARNING)
 
 
-def segment(image, kind):
+def segment(image, **kwargs):
     """Segment nuclei or cyto from image using cellpose and return the label"""
+    kind = kwargs.get("kind")
+    diameter = kwargs.get("diameter")
+
+    print(kind, diameter)
     model = models.Cellpose(gpu=0, model_type=kind)
 
-    output = model.eval([image], channels=[0, 0])
+    output = model.eval([image], channels=[0, 0], diameter=diameter)
 
     list_of_labels = output[0]
     return list_of_labels[0]
