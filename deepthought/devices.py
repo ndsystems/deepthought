@@ -12,7 +12,7 @@ import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Tuple, TypeVar
 
-from ophyd import Component
+from ophyd import Component, Device
 from ophyd import DynamicDeviceComponent as DDCpt
 from ophyd import PseudoPositioner
 from ophyd import PseudoSingle
@@ -244,17 +244,69 @@ class Focus:
         return OrderedDict()
 
 
+class Exposure:
+    name = "exposure"
+    parent = None
+
+    def __init__(self, mmc, parent=None):
+        self.mmc = mmc
+
+    def trigger(self):
+        status = Status(obj=self, timeout=10)
+
+        def wait():
+            status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def set(self, value):
+        status = Status(obj=self, timeout=5)
+
+        def wait():
+            try:
+                self.mmc.setExposure(value)
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read(self):
+        data = OrderedDict()
+        data['exposure'] = {
+            'value': self.mmc.getExposure(), 'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['exposure'] = {'source': "MMCore",
+                            'dtype': "number",
+                            'shape': []}
+        return data
+
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+
 class Camera:
     name = "camera"
     parent = None
 
-    def __init__(self, mmc=None):
+    def __init__(self, mmc=None, **kwargs):
         self.mmc = mmc
         if self.mmc is None:
             self.mmc = get_mmc()
         self.cam_name = "left_port"
         self.configure()
-
+        self.exposure = Exposure(self.mmc)
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 
         self.image = None
@@ -294,10 +346,6 @@ class Camera:
     def set_channel(self, channel):
         self.mmc.setConfig("channel", channel)
         return f"{channel}"
-
-    def set_exposure(self, exposure_time):
-        self.mmc.setExposure(exposure_time)
-        return self.mmc.getExposure()
 
     def configure(self):
         self.mmc.setCameraDevice(self.cam_name)
@@ -461,3 +509,52 @@ class TwoD_XY_StagePositioner(PseudoPositioner):
                 f"Incorrect argument: {self.name}.inverse({real_pos})"
             )
         return self.PseudoPosition(x=x, y=y)
+
+
+class Channel:
+    name = "channel"
+    parent = None
+
+    def __init__(self, mmc=None):
+        self.config_name = "channel"
+        self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
+        self.channels = self.mmc.getAvailableConfigs(self.config_name)
+
+    def read(self):
+        data = OrderedDict()
+        data['channel'] = {'value': self.mmc.getCurrentConfig(
+            self.config_name), 'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['channel'] = {'source': "MMCore",
+                           'dtype': "string",
+                           'shape': []}
+        return data
+
+    def set(self, value):
+        status = Status(obj=self, timeout=5)
+
+        def wait():
+            try:
+                self.mmc.setConfig(self.config_name, value)
+                self.mmc.waitForConfig(self.config_name, value)
+
+            except Exception as exc:
+                status.set_exception(exc)
+
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()
