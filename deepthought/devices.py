@@ -376,6 +376,74 @@ class Camera:
         return OrderedDict()
 
 
+class AutoFocus:
+    name = "zdc"
+    parent = None
+
+    def __init__(self, mmc=None, **kwargs):
+        self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
+        self.mmc_device_name = self.mmc.getAutoFocusDevice()
+
+    def trigger(self):
+        status = Status(obj=self, timeout=10)
+
+        def wait():
+            try:
+
+                self.mmc.waitForDevice(self.mmc_device_name)
+
+            except Exception as exc:
+                status.set_exception(exc)
+
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def set(self, value):
+        status = Status(obj=self, timeout=5)
+
+        def wait():
+            try:
+                self.mmc.setAutoFocusOffset(float(value))
+                self.mmc.waitForDevice(self.mmc_device_name)
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read(self) -> OrderedDict:
+        data = OrderedDict()
+        data['zdc'] = {'value': self.mmc.getAutoFocusOffset(),
+                       'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['zdc'] = {'source': self.mmc_device_name,
+                       'dtype': 'number',
+                       'shape': []}
+        return data
+
+    def subscribe(self, func):
+        if not func in self._subscribers:
+            self._subscribers.append(func)
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+
 class XYStage:
     name = "xy"
     parent = None
