@@ -21,18 +21,10 @@ def circularity(perimeter, area):
     return circularity
 
 
-def unit_pixel_length(mag, binning, det_px_size=6.5):
-    mag = 60
-    binning = 4
-
+def axial_length(num_px, mag, binning, det_px_size):
     unit_pixel_in_micron = (det_px_size /
                             mag) * binning
 
-    return unit_pixel_in_micron
-
-
-def axial_length(num_px, unit_px_length):
-
-    total_axial_length = unit_px_length * num_px
+    total_axial_length = unit_pixel_in_micron * num_px
 
     return total_axial_length

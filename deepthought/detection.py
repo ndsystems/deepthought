@@ -1,4 +1,4 @@
-from compute import circularity, unit_pixel_length
+from compute import circularity, axial_length
 from viz import imshow
 from skimage import measure
 from bluesky.callbacks import broker
@@ -13,7 +13,6 @@ def segment(image, **kwargs):
     kind = kwargs.get("kind")
     diameter = kwargs.get("diameter")
 
-    print(kind, diameter)
     model = models.Cellpose(gpu=0, model_type=kind)
 
     output = model.eval([image], channels=[0, 0], diameter=diameter)
@@ -32,8 +31,8 @@ def calculate_stage_coordinates(object_properties, stage_coords):
 
     x, y = object_properties["centroid-0"], object_properties["centroid-1"]
 
-    x = unit_pixel_length() * x
-    y = unit_pixel_length() * y
+    x = axial_length(mag=60, binning=4, num_px=512) * x
+    y = axial_length(mag=60, binning=4, num_px=512) * y
 
     x = np.around(x + stage_coords[0])
     y = np.around(y + stage_coords[1])
