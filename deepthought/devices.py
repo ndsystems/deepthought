@@ -134,54 +134,6 @@ def frame_crop(image, size=512, tol=100):
     return cropped_image
 
 
-class SimMMC:
-    """This is a simulated microscope that returns a 512x512
-    image."""
-
-    def __init__(self):
-        self.pos = 0
-        self.xy = [0, 0]
-        self.exposure_time = 0.1
-        self.data = io.imread("sim_data/DAPI.tif")
-
-    def getCameraDevice(self):
-        return "SimCamera"
-
-    def getFocusDevice(self):
-        return "SimFocus"
-
-    def snapImage(self):
-        time.sleep(self.exposure_time)
-        return
-
-    def setPosition(self, value):
-        self.pos = value
-        return
-
-    def getPosition(self):
-        return self.pos
-
-    def setXYPosition(self, value):
-        self.xy = value
-        return
-
-    def getXYPosition(self):
-        return self.xy
-
-    def waitForDevice(self, label):
-        time.sleep(1)
-        return
-
-    def getImage(self):
-        return frame_crop(self.data)
-
-    def setCameraDevice(self, cam):
-        self.cam_device = cam
-
-    def getAllowedPropertyValues(self):
-        pass
-
-
 class Focus:
     name = "z"
     parent = None
@@ -343,13 +295,9 @@ class Camera:
         self.mmc.setProperty(self.cam_name, prop, values[idx])
         return self.mmc.getProperty(self.cam_name, prop)
 
-    def set_channel(self, channel):
-        self.mmc.setConfig("channel", channel)
-        return f"{channel}"
-
     def configure(self):
         self.mmc.setCameraDevice(self.cam_name)
-        print(self.set_property("Binning", -2))
+        print(self.set_property("Binning", 0))
         print(self.set_property("PixelReadoutRate", 0))
         print(self.set_property("Sensitivity/DynamicRange", 0))
 
@@ -502,6 +450,12 @@ class XYStage:
 
     def describe_configuration(self) -> OrderedDict:
         return OrderedDict()
+
+    # def stage(self):
+    #     try:
+    #         return super().stage()
+    #     except RedundentStage:
+    #         return []
 
 
 class SoftMMCPositioner(SignalPositionerMixin, Signal):
