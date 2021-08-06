@@ -29,6 +29,7 @@ from ophyd import Signal
 from skimage import io
 import warnings
 from comms import client
+import rpyc
 
 
 def get_mmc():
@@ -145,21 +146,6 @@ class Focus:
         self.mmc_device_name = self.mmc.getFocusDevice()
         self.position = self.mmc.getPosition()
 
-    def trigger(self):
-        status = Status(obj=self, timeout=10)
-
-        def wait():
-            try:
-                self.mmc.waitForDevice(self.mmc_device_name)
-            except Exception as exc:
-                status.set_exception(exc)
-            else:
-                status.set_finished()
-
-        threading.Thread(target=wait).start()
-
-        return status
-
     def read(self):
         data = OrderedDict()
         data['z'] = {'value': self.mmc.getPosition(), 'timestamp': time.time()}
@@ -177,8 +163,10 @@ class Focus:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.mmc.setPosition(float(value))
                 self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
                 self.position = self.mmc.getPosition()
             except Exception as exc:
                 status.set_exception(exc)
@@ -218,7 +206,10 @@ class Exposure:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.mmc.setExposure(value)
+                self.mmc.waitForSystem()
+
             except Exception as exc:
                 status.set_exception(exc)
             else:
@@ -273,12 +264,13 @@ class Camera:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.image_time = time.time()
                 self.mmc.snapImage()
                 self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
 
-                self.image = self.mmc.getImage()
-                self.image = np.asarray(self.image)
+                self.image = rpyc.classic.obtain(self.mmc.getImage())
 
             except Exception as exc:
                 status.set_exception(exc)
@@ -293,24 +285,25 @@ class Camera:
     def set_property(self, prop, idx):
         values = self.mmc.getAllowedPropertyValues(self.cam_name, prop)
         self.mmc.setProperty(self.cam_name, prop, values[idx])
+        self.mmc.waitForSystem()
         return self.mmc.getProperty(self.cam_name, prop)
 
     def configure(self):
         self.mmc.setCameraDevice(self.cam_name)
-        print(self.set_property("Binning", 0))
+        print(self.set_property("Binning", -2))
         print(self.set_property("PixelReadoutRate", 0))
         print(self.set_property("Sensitivity/DynamicRange", 0))
 
     def read(self) -> OrderedDict:
         data = OrderedDict()
-        data['camera'] = {'value': self.image, 'timestamp': self.image_time}
+        data['image'] = {'value': self.image, 'timestamp': self.image_time}
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['camera'] = {'source': self.mmc_device_name,
-                          'dtype': 'array',
-                          'shape': self.image.shape}
+        data['image'] = {'source': self.mmc_device_name,
+                         'dtype': 'array',
+                         'shape': self.image.shape}
         return data
 
     def subscribe(self, func):
@@ -339,8 +332,9 @@ class AutoFocus:
 
         def wait():
             try:
-
+                self.mmc.waitForSystem()
                 self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
 
             except Exception as exc:
                 status.set_exception(exc)
@@ -357,8 +351,18 @@ class AutoFocus:
 
         def wait():
             try:
-                self.mmc.setAutoFocusOffset(float(value))
-                self.mmc.waitForDevice(self.mmc_device_name)
+                if type(value) is bool:
+                    self.mmc.waitForSystem()
+                    self.mmc.enableContinuousFocus(value)
+                    self.mmc.waitForDevice(self.mmc_device_name)
+                    self.mmc.waitForSystem()
+
+                elif type(value) is float:
+                    self.mmc.waitForSystem()
+                    self.mmc.setAutoFocusOffset(value)
+                    self.mmc.waitForDevice(self.mmc_device_name)
+                    self.mmc.waitForSystem()
+
             except Exception as exc:
                 status.set_exception(exc)
             else:
@@ -370,14 +374,14 @@ class AutoFocus:
 
     def read(self) -> OrderedDict:
         data = OrderedDict()
-        data['zdc'] = {'value': self.mmc.getAutoFocusOffset(),
+        data['zdc'] = {'value': self.mmc.isContinuousFocusEnabled(),
                        'timestamp': time.time()}
         return data
 
     def describe(self):
         data = OrderedDict()
         data['zdc'] = {'source': self.mmc_device_name,
-                       'dtype': 'number',
+                       'dtype': 'boolean',
                        'shape': []}
         return data
 
@@ -434,8 +438,10 @@ class XYStage:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.mmc.setXYPosition(*value)
                 self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
             except Exception as exc:
                 status.set_exception(exc)
             else:
@@ -471,7 +477,8 @@ class SoftMMCPositioner(SignalPositionerMixin, Signal):
         super().__init__(*args, set_func=self._write_xy, **kwargs)
 
         # get the position from the controller on startup
-        self._readback = np.array(self.mmc.getXYPosition())
+        self._readback = np.array(
+            rpyc.classic.obtain(self.mmc.getXYPosition()))
 
     def _write_xy(self, value, **kwargs):
         if self._move_thread is not None:
@@ -481,13 +488,16 @@ class SoftMMCPositioner(SignalPositionerMixin, Signal):
         st = MoveStatus(self, target=value)
 
         def moveXY():
+            self.mmc.waitForSystem()
             self.mmc.setXYPosition(*value)
             # ALWAYS wait for the device
             self.mmc.waitForDevice(self.mmc_device_name)
+            self.mmc.waitForSystem()
 
             # update the _readback attribute (which triggers other ophyd actions)
             # np.array on the netref object forces conversion to np.array
-            self._readback = np.array(self.mmc.getXYPosition())
+            self._readback = np.array(
+                rpyc.classic.obtain(self.mmc.getXYPosition()))
 
             # MUST set to None BEFORE declaring status True
             self._move_thread = None
@@ -513,7 +523,7 @@ class TwoD_XY_StagePositioner(PseudoPositioner):
         """Run a forward (pseudo -> real) calculation (return pair)."""
         return self.RealPosition(pseudo_pos)
 
-    # @real_position_argument
+    @real_position_argument
     def inverse(self, real_pos):
         """Run an inverse (real -> pseudo) calculation (return x & y)."""
         if len(real_pos) == 1:
@@ -562,8 +572,10 @@ class Channel:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.mmc.setConfig(self.config_name, value)
                 self.mmc.waitForConfig(self.config_name, value)
+                self.mmc.waitForSystem()
 
             except Exception as exc:
                 status.set_exception(exc)
