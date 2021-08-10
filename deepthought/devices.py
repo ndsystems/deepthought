@@ -31,9 +31,14 @@ import warnings
 from comms import client
 import rpyc
 
+mmc = None
+
 
 def get_mmc():
-    mmc = client(addr="10.10.1.35", port=18861).mmc
+    global mmc
+
+    if mmc is None:
+        mmc = client(addr="10.10.1.35", port=18861).mmc
     return mmc
 
 
@@ -248,7 +253,6 @@ class Camera:
         if self.mmc is None:
             self.mmc = get_mmc()
         self.cam_name = "left_port"
-        self.configure()
         self.exposure = Exposure(self.mmc)
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 
