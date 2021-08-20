@@ -375,7 +375,7 @@ if __name__ == '__main__':
     center = [-31706.9, -833.0]
     disk = Disk(center=center)
     disk.num = 20
-    do_image = True
+    do_image = False
 
     if do_image:
         from microscope import Microscope
@@ -385,8 +385,6 @@ if __name__ == '__main__':
                               form=disk,
                               channels=[tritc])
         s.map()
-    import time
-    time.sleep(10)
     v = SampleVisualizer(image_header=db[-2],
                          process_header=db[-1])
     v.plot()
