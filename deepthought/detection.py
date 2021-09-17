@@ -3,9 +3,9 @@ from viz import imshow
 from skimage import measure
 from bluesky.callbacks import broker
 from cellpose import models
-import numpy as np
 import logging
 logging.getLogger("cellpose").setLevel(logging.WARNING)
+import numpy as np
 
 
 def segment(image, **kwargs):
@@ -13,7 +13,7 @@ def segment(image, **kwargs):
     kind = kwargs.get("kind")
     diameter = kwargs.get("diameter")
 
-    model = models.Cellpose(gpu=0, model_type=kind)
+    model = models.Cellpose(gpu=1, model_type=kind)
 
     output = model.eval([image], channels=[0, 0], diameter=diameter)
 
@@ -21,21 +21,25 @@ def segment(image, **kwargs):
     return list_of_labels[0]
 
 
-def find_object_properties(label, image):
+def find_object_properties(label, image, coords, pixel_size):
     regions = measure.regionprops(label, intensity_image=image)
+    regions = calculate_stage_coordinates(regions, coords, pixel_size)
     return regions
 
 
-def calculate_stage_coordinates(object_properties, stage_coords):
+def calculate_stage_coordinates(objects, stage_coords, pixel_size):
     stage_coords = np.array(stage_coords)
+    
+    # pixel coords
+    for reg in objects:
+        x, y = reg.centroid
 
-    x, y = object_properties["centroid-0"], object_properties["centroid-1"]
+        x = x * pixel_size
+        y = y * pixel_size
 
-    x = axial_length(mag=60, binning=4, num_px=512) * x
-    y = axial_length(mag=60, binning=4, num_px=512) * y
+        x_microns = np.around(x + stage_coords[0])
+        y_microns = np.around(y + stage_coords[1])
 
-    x = np.around(x + stage_coords[0])
-    y = np.around(y + stage_coords[1])
-
-    object_properties["xy"] = list(zip(x, y))
-    return object_properties
+        reg.xy = [x_microns, y_microns]
+    
+    return objects

@@ -1,3 +1,6 @@
+import logging
+logging.getLogger("imported_module").setLevel(logging.WARNING)
+
 from cycler import cycler
 import numpy as np
 from bluesky.callbacks.best_effort import BestEffortCallback
@@ -8,7 +11,9 @@ from compute import axial_length
 from bluesky.callbacks.broker import post_run, BrokerCallbackBase
 from data import db
 import napari
-
+from detection import segment, find_object_properties
+import matplotlib.pyplot as plt
+import threading
 
 bec = BestEffortCallback()
 bec.disable_plots()
@@ -48,8 +53,7 @@ class ChannelConfig:
     def __repr__(self):
         return str(self.name)
 
-
-class Microscope:
+class BaseMicroscope:
     def __init__(self):
         self.name = None
         self.mmc = get_mmc()
@@ -57,157 +61,35 @@ class Microscope:
         self.z = Focus(self.mmc)
         self.ch = Channel(self.mmc)
         self.af = AutoFocus(self.mmc)
-
         self.stage = TwoD_XY_StagePositioner("", name="xy_stage")
+    
+    def unit_physical_length(self):
+        num_px = 2048
+        mag = 60
+        binning = 1
+        det_px_size = 6.5  # um
+        unit_pixel_in_micron = (det_px_size / mag) * binning
+
+        return unit_pixel_in_micron
 
     def estimate_axial_length(self):
-        num_px = 512
+        num_px = 2048
         mag = 60
-        binning = 4
+        binning = 1
         det_px_size = 6.5  # um
         ax_len = axial_length(num_px, mag, binning, det_px_size)
         return ax_len
 
-    def create_circle_square(self, center, num):
-        x_center, y_center = center
+class Microscope(BaseMicroscope):
+    def __init__(self):
+        super().__init__()
+        self.fg = FrameGroup()
+        self.fv = FrameGroupVisualizer()
+        self.fg.subscribe(self.fv)
 
-        full_range = num * self.estimate_axial_length()
-
-        x_range = full_range
-        y_range = full_range
-        x_num = num
-        y_num = num
-
-        pattern_args = dict(x_motor=self.stage.x, y_motor=self.stage.y, x_center=x_center,
-                            y_center=y_center, x_range=x_range, y_range=y_range,
-                            x_num=x_num, y_num=y_num)
-        # cycler for x,y
-        cyc = plan_patterns.spiral_square_pattern(**pattern_args)
-
-        return cyc
-
-    def initial_scan(self, channels, center, num, focus=None, repeat_times=1, delay=0):
-        if focus is not None:
-            yield from plan_stubs.mv(self.af, False)
-            yield from plan_stubs.mv(self.z, focus)
-            yield from plan_stubs.mv(self.af, True)
-            yield from plan_stubs.wait()
-
+    def snap(self, positions=None, channel=None, num=10):
         detectors = [self.cam, self.stage,
                      self.z, self.ch, self.cam.exposure]
-
-        cyc = self.create_circle_square(center, num)
-
-        def inner_initial_scan():
-            for _ in np.arange(repeat_times):
-                yield from plans.scan_nd(detectors, cyc, per_step=self.per_nd_step)
-                yield from plan_stubs.sleep(delay)
-
-        # # set channel, and exposure time
-        # yield from plan_stubs.mv(self.ch, channel.name)
-        # yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
-
-        return (yield from inner_initial_scan())
-
-    def per_nd_step_ch(self, detectors, step, pos_cache):
-        def move():
-            yield from plan_stubs.checkpoint()
-            grp = utils.short_uid('set')
-            for motor, pos in step.items():
-                if pos == pos_cache[motor]:
-                    # This step does not move this motor.
-                    continue
-
-                yield from plan_stubs.mv(motor, pos, group=grp)
-                pos_cache[motor] = pos
-            yield from plan_stubs.wait(group=grp)
-
-        def per_channel():
-            for channel in self.channels:
-                yield from plan_stubs.checkpoint()
-                yield from plan_stubs.mv(self.ch, channel.name)
-                yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
-
-                yield from plan_stubs.trigger_and_read(detectors)
-
-        yield from move()
-        yield from per_channel()
-
-    def ddc(self, channels, shape):
-        detectors = [self.cam, self.stage,
-                     self.z, self.ch, self.cam.exposure]
-
-        self.channels = channels
-
-        cyc = self.create_circle_square(shape.center, shape.num)
-
-        def inner_initial_scan():
-            yield from plans.scan_nd(detectors, cyc, per_step=self.per_nd_step_ch)
-
-        return (yield from inner_initial_scan())
-
-    def zscan(self, detectors, focus, microns, num_slices):
-        z_list_abs = np.linspace(-microns, microns, num_slices) + focus
-
-        # to prevent race
-        yield from plan_stubs.sleep(1)
-
-        for z_value in z_list_abs:
-            yield from plan_stubs.mv(self.z, z_value)
-            yield from plan_stubs.trigger_and_read(detectors)
-
-    def per_nd_step(self, detectors, step, pos_cache):
-        def move():
-            yield from plan_stubs.checkpoint()
-            grp = utils.short_uid('set')
-            for motor, pos in step.items():
-                if pos == pos_cache[motor]:
-                    # This step does not move this motor.
-                    continue
-
-                yield from plan_stubs.abs_set(motor, pos, group=grp)
-                pos_cache[motor] = pos
-            yield from plan_stubs.wait(group=grp)
-        # move xy
-        yield from move()
-
-        # read the focus for the current xy
-        focus_xy = yield from plan_stubs.rd(self.z)
-        print(f"focus is {focus_xy}")
-        # take a z scan
-        try:
-            yield from self.zdc_enabled_zscan(detectors, focus=focus_xy)
-        except KeyboardInterrupt:
-            yield from plan_stubs.mv(self.af, False)
-            yield from plan_stubs.abs_set(self.z, focus_xy)
-            yield from plan_stubs.mv(self.af, True)
-
-    def zdc_enabled_zscan(self, detectors, focus):
-        # assumption is, when AF is on, the z-value has
-        # the right focus, despite the moving XY.
-        # The Z-drift compensator has motor control, which
-        # maintains focus on a continuous basis.
-
-        # turn the AF off, so we have Z motor control
-        yield from plan_stubs.mv(self.af, False)
-
-        # take a relative Z-scan
-        yield from self.zscan(detectors, focus, 8, 8)
-
-        # restore motor position to original focus
-        yield from plan_stubs.mv(self.z, focus)
-
-        # turn on AF, Z motor control lost.
-        yield from plan_stubs.mv(self.af, True)
-        yield from plan_stubs.wait()
-
-    def test(self, position=None, channel=None):
-        detectors = [self.cam, self.stage,
-                     self.z, self.ch, self.cam.exposure]
-
-        if position is not None:
-            print(f"moving to {position}")
-            yield from plan_stubs.mv(self.stage, position)
 
         if channel is not None:
             print(f"moving to {channel}")
@@ -216,37 +98,90 @@ class Microscope:
 
         def inner_loop():
             yield from plan_stubs.open_run()
-            for _ in range(1000):
+            for _ in range(num):
                 yield from plan_stubs.trigger_and_read(detectors)
-                yield from plan_stubs.sleep(1)
+                yield from plan_stubs.wait()
+
+                img = yield from plan_stubs.rd(self.cam)
+                x = yield from plan_stubs.rd(self.stage.x)
+                y = yield from plan_stubs.rd(self.stage.y)
+                self.fg.add(Frame(img, [x, y], channel.model, self.unit_physical_length()))
+
+                yield from plan_stubs.mvr(self.stage.x, -self.estimate_axial_length())
             yield from plan_stubs.close_run()
 
         yield from inner_loop()
 
-    def focus(self, position=None, channel=None):
-        if position is not None:
-            print(f"moving to {position}")
-            yield from plan_stubs.mv(self.stage, position)
+class FrameGroupVisualizer:
+    def __init__(self):
+        self.fig, self.ax = plt.subplots(dpi=120)
+        self.ax.set_aspect('equal')
+        self.frame_n = 1
+        self.object_count = 0
+        plt.show(block=False)
 
-        if channel is not None:
-            print(f"moving to {channel}")
-            yield from plan_stubs.mv(self.ch, channel.name)
-            yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
+    def update(self, frame):
+        object_coords = [ob.xy for ob in frame._objects]
+        self.object_count += len(object_coords)
+        coords_x = [_[0] for _ in object_coords]
+        coords_y = [_[1] for _ in object_coords]
+        print(f"N ==== {self.frame_n}")
 
-        detectors = [self.cam, self.stage,
-                     self.z, self.ch, self.cam.exposure]
+        if self.frame_n == 1:
+            self.ax.scatter(coords_x, coords_y, label=frame.coords, s=7)
+            self.frame_n += 1
+        else:
+            self.ax.set_title(f"N = {self.object_count} from {self.frame_n} frames")
+            self.ax.scatter(coords_x, coords_y, label=frame.coords, s=7)
+            self.frame_n += 1
 
-        def inner_loop():
-            yield from plan_stubs.open_run()
+        self.fig.canvas.draw()
+        plt.legend()
+            
 
-            for _ in np.arange(2200, 2400, 100):
-                yield from plan_stubs.mv(self.z, _)
-                yield from plan_stubs.trigger_and_read(detectors)
-                yield from plan_stubs.sleep(1)
-            yield from plan_stubs.close_run()
+class FrameGroup:
+    def __init__(self):
+        self.frames = []
+        self._subscribers = []
 
-        yield from inner_loop()
+    def add(self, frame):
+        def wait():
+            self.frames.append(frame)
+            img = frame.seg()
+            self.notify(frame)
+        threading.Thread(target=wait).start()
 
+    def subscribe(self, subscriber):
+        if subscriber not in self._subscribers:
+            self._subscribers.append(subscriber)
+
+    def notify(self, frame):
+        for subscriber in self._subscribers:
+            threading.Thread(target=subscriber.update, args=(frame,)).start()
+
+    def __getitem__(self, item):
+        return self.frames[item]
+
+class Frame:
+    def __init__(self, image, coords, model, pixel_size):
+        self.image = image
+        self.coords = coords
+        self.model = model
+        self.pixel_size = pixel_size
+
+    def seg(self):
+        self.label = segment(self.image, **self.model)
+        self._objects = find_object_properties(self.label, self.image, self.coords, self.pixel_size)
+        return self.label
+
+    def view(self):
+        v = napari.view_image(self.image)
+        v.add_labels(self.label)
+
+    def hist(self):
+        means = [_.intensity_image.mean() for _ in self._objects]
+        plt.hist(means)
+        plt.show()
 
 def inspect_plan(plan):
     msgs = list(plan)
@@ -254,83 +189,13 @@ def inspect_plan(plan):
         print(m)
 
 
-def view_uid(uid, shape=None):
-    imgs = images_from_uid(uid)
-    if shape is not None:
-        imgs = imgs.reshape(shape)
-    viewer = napari.view_image(imgs)
-    napari.run()
-
-
-class LiveImage(BrokerCallbackBase):
-    """
-    Stream 2D images in a cross-section viewer.
-
-    Parameters
-    ----------
-    field : string
-        name of data field in an Event
-    fs: Registry instance
-        The Registry instance to pull the data from
-    cmap : str,  colormap, or None
-        color map to use.  Defaults to gray
-    norm : Normalize or None
-       Normalization function to use
-    limit_func : callable, optional
-        function that takes in the image and returns clim values
-    auto_redraw : bool, optional
-    interpolation : str, optional
-        Interpolation method to use. List of valid options can be found in
-        CrossSection2DView.interpolation
-    """
-
-    def __init__(self, field="image", *, db=None, cmap=None, norm=None,
-                 limit_func=None, auto_redraw=True, interpolation=None,
-                 window_title=None):
-        super().__init__((field,), db=db)
-        self.field = field
-
-    def event(self, doc):
-        super().event(doc)
-        data = doc['data'][self.field]
-        self.update(data)
-
-    def update(self, data):
-        v = napari.view_image(data)
-        napari.run(force=True, max_loop_level=2)
-
-
 if __name__ == "__main__":
-    bf = ChannelConfig("BF")
-    bf.exposure = 200
-    bf.model = {"kind": "cyto",
-                "diameter": 10}
-
-    fitc = ChannelConfig("FITC")
-    fitc.exposure = 500
-    fitc.model = {"kind": "nuclei",
-                  "diameter": 50}
-
     dapi = ChannelConfig("DAPI")
     dapi.exposure = 50
     dapi.model = {"kind": "nuclei",
-                  "diameter": 50}
-
-    cy5 = ChannelConfig("Cy5")
-    cy5.exposure = 500
-    cy5.model = {"kind": "nuclei",
-                 "diameter": 50}
+                  "diameter": 100}
 
     m = Microscope()
 
-    # initial scan
-    center = [-31928.780, -611.140]
-    num = 10
-
-    shape = Disk(center, num)
-    channels = [dapi, bf]
-
-    plan = m.ddc(channels, shape)
+    plan = m.snap(channel=dapi)
     uid, = RE(plan)
-    # inspect_plan(plan)
-    view_uid(uid,)
