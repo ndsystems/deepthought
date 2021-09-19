@@ -1,6 +1,3 @@
-import logging
-logging.getLogger("imported_module").setLevel(logging.WARNING)
-
 from cycler import cycler
 import numpy as np
 from bluesky.callbacks.best_effort import BestEffortCallback
@@ -80,6 +77,11 @@ class BaseMicroscope:
         ax_len = axial_length(num_px, mag, binning, det_px_size)
         return ax_len
 
+    def generate_positions(self, relative=True):
+        positions = [[self.estimate_axial_length(), 0]] * 5 + [[0, self.estimate_axial_length()]] * 5
+        positions = positions + [[-self.estimate_axial_length(), 0]] * 5 + [[0, -self.estimate_axial_length()]] * 5
+        return positions
+
 class Microscope(BaseMicroscope):
     def __init__(self):
         super().__init__()
@@ -112,6 +114,64 @@ class Microscope(BaseMicroscope):
 
         yield from inner_loop()
 
+    def pcna(self, positions=None, channel=None, num=100):
+        detectors = [self.cam, self.stage,
+                     self.z, self.ch, self.cam.exposure]
+        
+        if positions is None:
+            positions = self.generate_positions()
+
+        if channel is not None:
+            print(f"moving to {channel}")
+            yield from plan_stubs.mv(self.ch, channel.name)
+            yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
+
+        def inner_loop():
+            
+            frame_positions = []
+            yield from plan_stubs.open_run()
+
+            for pos in positions:
+                yield from plan_stubs.trigger_and_read(detectors)
+                yield from plan_stubs.wait()
+
+                img = yield from plan_stubs.rd(self.cam)
+                x = yield from plan_stubs.rd(self.stage.x)
+                y = yield from plan_stubs.rd(self.stage.y)
+
+                self.fg.add(Frame(img, [x, y], channel.model, self.unit_physical_length()))
+                yield from plan_stubs.mvr(self.stage.x, pos[0])
+                yield from plan_stubs.mvr(self.stage.y, pos[1])
+
+                frame_positions.append([x, y])
+                if self.fg.count >= num:
+                    break
+            yield from plan_stubs.close_run()
+
+            for _ in range(100):
+                yield from plan_stubs.sleep(20*60)
+
+                yield from plan_stubs.open_run()
+
+                for pos in frame_positions:
+                    yield from plan_stubs.mv(self.stage.x, pos[0])
+                    yield from plan_stubs.mv(self.stage.y, pos[1])
+                    
+                    yield from plan_stubs.trigger_and_read(detectors)
+                    yield from plan_stubs.wait()
+
+                    img = yield from plan_stubs.rd(self.cam)
+                    x = yield from plan_stubs.rd(self.stage.x)
+                    y = yield from plan_stubs.rd(self.stage.y)
+
+                    self.fg.add(Frame(img, [x, y], channel.model, self.unit_physical_length()))
+                    yield from plan_stubs.sleep(2)
+                yield from plan_stubs.close_run()
+
+
+
+        yield from inner_loop()
+
 class FrameGroupVisualizer:
     def __init__(self):
         self.fig, self.ax = plt.subplots(dpi=120)
@@ -136,18 +196,19 @@ class FrameGroupVisualizer:
             self.frame_n += 1
 
         self.fig.canvas.draw()
-        plt.legend()
             
 
 class FrameGroup:
     def __init__(self):
         self.frames = []
         self._subscribers = []
+        self.count = 0
 
     def add(self, frame):
         def wait():
             self.frames.append(frame)
-            img = frame.seg()
+            _, objs = frame.seg()
+            self.count += len(objs)
             self.notify(frame)
         threading.Thread(target=wait).start()
 
@@ -172,7 +233,7 @@ class Frame:
     def seg(self):
         self.label = segment(self.image, **self.model)
         self._objects = find_object_properties(self.label, self.image, self.coords, self.pixel_size)
-        return self.label
+        return self.label, self._objects
 
     def view(self):
         v = napari.view_image(self.image)
@@ -190,12 +251,12 @@ def inspect_plan(plan):
 
 
 if __name__ == "__main__":
-    dapi = ChannelConfig("DAPI")
-    dapi.exposure = 50
-    dapi.model = {"kind": "nuclei",
+    tritc = ChannelConfig("TRITC")
+    tritc.exposure = 50
+    tritc.model = {"kind": "nuclei",
                   "diameter": 100}
 
     m = Microscope()
 
-    plan = m.snap(channel=dapi)
+    plan = m.pcna(channel=tritc, num=100)
     uid, = RE(plan)
