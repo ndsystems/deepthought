@@ -327,6 +327,7 @@ class AutoFocus:
 
     def __init__(self, mmc=None, **kwargs):
         self.mmc = mmc
+        self._subscribers = []
         if self.mmc is None:
             self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getAutoFocusDevice()
