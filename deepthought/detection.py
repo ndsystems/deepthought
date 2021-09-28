@@ -6,7 +6,7 @@ from cellpose import models
 import logging
 logging.getLogger("cellpose").setLevel(logging.WARNING)
 import numpy as np
-
+from coords import rc_to_cart
 
 def segment(image, **kwargs):
     """Segment nuclei or cyto from image using cellpose and return the label"""
@@ -21,18 +21,15 @@ def segment(image, **kwargs):
     return list_of_labels[0]
 
 
-def find_object_properties(label, image, coords, pixel_size):
+def find_object_properties(label, image, stage_coords, pixel_size):
     regions = measure.regionprops(label, intensity_image=image)
-    regions = calculate_stage_coordinates(regions, coords, pixel_size)
-    return regions
 
-
-def calculate_stage_coordinates(objects, stage_coords, pixel_size):
-    stage_coords = np.array(stage_coords)
-    
     # pixel coords
-    for reg in objects:
-        x, y = reg.centroid
+    for reg in regions:
+        rc_coords = np.array([reg.centroid])
+        
+        coords, _ = rc_to_cart(rc_coords, image=image)
+        x, y = coords[0]
 
         x = x * pixel_size
         y = y * pixel_size
@@ -42,4 +39,4 @@ def calculate_stage_coordinates(objects, stage_coords, pixel_size):
 
         reg.xy = [x_microns, y_microns]
     
-    return objects
+    return regions

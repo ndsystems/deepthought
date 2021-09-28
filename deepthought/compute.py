@@ -28,3 +28,5 @@ def axial_length(num_px, mag, binning, det_px_size):
     total_axial_length = unit_pixel_in_micron * num_px
 
     return total_axial_length
+
+
