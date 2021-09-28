@@ -1,23 +1,24 @@
-from microscope import Microscope
-from sample import FoV
-from viz import imshow
-
-# to do
-# 1. object map
-#   get objects, stage coords for individual images, add offset to them
-#   check FoV
-# 2. map a rectangle with corners defined
-#   use the corner to define a grid for imaging
-
-corners = {
-    1: [-36292, -3397],
-    2: [-27397, -3909],
-    3: [-27028, 1683],
-    4: [-36292, 1683]
-}
+from microscope import Microscope, ChannelConfig, RE
 
 
-# bs - bright star microscope
-bs = Microscope()
+if __name__ == "__main__":
+    tritc = ChannelConfig("TRITC")
+    tritc.exposure = 500
+    tritc.model = {"kind": "nuclei",
+                  "diameter": 100}
 
-uid = bs.snap(num=1)
+    dapi = ChannelConfig("DAPI")
+    dapi.exposure = 30
+    dapi.model = {"kind": "nuclei",
+                  "diameter": 100}
+
+    fitc = ChannelConfig("FITC")
+    fitc.exposure = 300
+    fitc.model = {"kind": "nuclei",
+                  "diameter": 100}
+
+    m = Microscope()
+    m.mmc.setXYPosition(-32808.46, -1314.0)
+
+    plan = m.scan(channel=dapi, secondary_channel=fitc, num=10000)
+    uid, = RE(plan)
