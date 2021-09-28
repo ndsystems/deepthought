@@ -12,7 +12,7 @@ import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Tuple, TypeVar
 
-from ophyd import Component
+from ophyd import Component, Device
 from ophyd import DynamicDeviceComponent as DDCpt
 from ophyd import PseudoPositioner
 from ophyd import PseudoSingle
@@ -29,16 +29,24 @@ from ophyd import Signal
 from skimage import io
 import warnings
 from comms import client
+import rpyc
+
+mmc = None
 
 
 def get_mmc():
-    mmc = client(addr="10.10.1.35", port=18861).mmc
+    global mmc
+
+    if mmc is None:
+        mmc = client(addr="10.10.1.35", port=18861).mmc
     return mmc
 
 
 class BaseScope:
-    def __init__(self, mmc):
+    def __init__(self, mmc=None):
         self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
 
     def device_properties(self, device):
         """get property names and values for the given device"""
@@ -132,77 +140,16 @@ def frame_crop(image, size=512, tol=100):
     return cropped_image
 
 
-class SimMMC:
-    """This is a simulated microscope that returns a 512x512
-    image."""
-
-    def __init__(self):
-        self.pos = 0
-        self.xy = [0, 0]
-        self.exposure_time = 0.1
-        self.data = io.imread("sim_data/DAPI.tif")
-
-    def getCameraDevice(self):
-        return "SimCamera"
-
-    def getFocusDevice(self):
-        return "SimFocus"
-
-    def snapImage(self):
-        time.sleep(self.exposure_time)
-        return
-
-    def setPosition(self, value):
-        self.pos = value
-        return
-
-    def getPosition(self):
-        return self.pos
-
-    def setXYPosition(self, value):
-        self.xy = value
-        return
-
-    def getXYPosition(self):
-        return self.xy
-
-    def waitForDevice(self, label):
-        time.sleep(1)
-        return
-
-    def getImage(self):
-        return frame_crop(self.data)
-
-    def setCameraDevice(self, cam):
-        self.cam_device = cam
-
-    def getAllowedPropertyValues(self):
-        pass
-
-
 class Focus:
     name = "z"
     parent = None
 
-    def __init__(self, mmc):
+    def __init__(self, mmc=None):
         self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getFocusDevice()
         self.position = self.mmc.getPosition()
-
-    def trigger(self):
-        status = Status(obj=self, timeout=10)
-
-        def wait():
-            try:
-                self.mmc.waitForDevice(self.mmc_device_name)
-            except Exception as exc:
-                status.set_exception(exc)
-            else:
-                status.set_finished()
-
-        threading.Thread(target=wait).start()
-
-        return status
 
     def read(self):
         data = OrderedDict()
@@ -221,8 +168,10 @@ class Focus:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.mmc.setPosition(float(value))
                 self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
                 self.position = self.mmc.getPosition()
             except Exception as exc:
                 status.set_exception(exc)
@@ -240,15 +189,71 @@ class Focus:
         return OrderedDict()
 
 
+class Exposure:
+    name = "exposure"
+    parent = None
+
+    def __init__(self, mmc, parent=None):
+        self.mmc = mmc
+
+    def trigger(self):
+        status = Status(obj=self, timeout=10)
+
+        def wait():
+            status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def set(self, value):
+        status = Status(obj=self, timeout=5)
+
+        def wait():
+            try:
+                self.mmc.waitForSystem()
+                self.mmc.setExposure(value)
+                self.mmc.waitForSystem()
+
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read(self):
+        data = OrderedDict()
+        data['exposure'] = {
+            'value': self.mmc.getExposure(), 'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['exposure'] = {'source': "MMCore",
+                            'dtype': "number",
+                            'shape': []}
+        return data
+
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+
 class Camera:
     name = "camera"
     parent = None
 
-    def __init__(self, mmc):
+    def __init__(self, mmc=None, **kwargs):
         self.mmc = mmc
-        self.cam_name = "right_port"
-        # self.configure()
-
+        if self.mmc is None:
+            self.mmc = get_mmc()
+        self.cam_name = "left_port"
+        self.exposure = Exposure(self.mmc)
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 
         self.image = None
@@ -263,12 +268,13 @@ class Camera:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.image_time = time.time()
                 self.mmc.snapImage()
                 self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
 
-                self.image = self.mmc.getImage()
-                self.image = np.asarray(self.image)
+                self.image = rpyc.classic.obtain(self.mmc.getImage())
 
             except Exception as exc:
                 status.set_exception(exc)
@@ -283,32 +289,104 @@ class Camera:
     def set_property(self, prop, idx):
         values = self.mmc.getAllowedPropertyValues(self.cam_name, prop)
         self.mmc.setProperty(self.cam_name, prop, values[idx])
+        self.mmc.waitForSystem()
         return self.mmc.getProperty(self.cam_name, prop)
-
-    def set_channel(self, channel):
-        self.mmc.setConfig("channel", channel)
-        return f"{channel}"
-
-    def set_exposure(self, exposure_time):
-        self.mmc.setExposure(exposure_time)
-        return self.mmc.getExposure()
 
     def configure(self):
         self.mmc.setCameraDevice(self.cam_name)
-        print(self.set_property("Binning", -1))
+        print(self.set_property("Binning", -2))
         print(self.set_property("PixelReadoutRate", 0))
         print(self.set_property("Sensitivity/DynamicRange", 0))
 
     def read(self) -> OrderedDict:
         data = OrderedDict()
-        data['camera'] = {'value': self.image, 'timestamp': self.image_time}
+        data['image'] = {'value': self.image, 'timestamp': self.image_time}
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['camera'] = {'source': self.mmc_device_name,
-                          'dtype': 'array',
-                          'shape': self.image.shape}
+        data['image'] = {'source': self.mmc_device_name,
+                         'dtype': 'array',
+                         'shape': self.image.shape}
+        return data
+
+    def subscribe(self, func):
+        if not func in self._subscribers:
+            self._subscribers.append(func)
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+
+class AutoFocus:
+    name = "zdc"
+    parent = None
+
+    def __init__(self, mmc=None, **kwargs):
+        self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
+        self.mmc_device_name = self.mmc.getAutoFocusDevice()
+
+    def trigger(self):
+        status = Status(obj=self, timeout=10)
+
+        def wait():
+            try:
+                self.mmc.waitForSystem()
+                self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
+
+            except Exception as exc:
+                status.set_exception(exc)
+
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def set(self, value):
+        status = Status(obj=self, timeout=5)
+
+        def wait():
+            try:
+                if type(value) is bool:
+                    self.mmc.waitForSystem()
+                    self.mmc.enableContinuousFocus(value)
+                    self.mmc.waitForDevice(self.mmc_device_name)
+                    self.mmc.waitForSystem()
+
+                elif type(value) is float:
+                    self.mmc.waitForSystem()
+                    self.mmc.setAutoFocusOffset(value)
+                    self.mmc.waitForDevice(self.mmc_device_name)
+                    self.mmc.waitForSystem()
+
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read(self) -> OrderedDict:
+        data = OrderedDict()
+        data['zdc'] = {'value': self.mmc.isContinuousFocusEnabled(),
+                       'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['zdc'] = {'source': self.mmc_device_name,
+                       'dtype': 'boolean',
+                       'shape': []}
         return data
 
     def subscribe(self, func):
@@ -326,8 +404,10 @@ class XYStage:
     name = "xy"
     parent = None
 
-    def __init__(self, mmc):
+    def __init__(self, mmc=None):
         self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getXYStageDevice()
 
     def trigger(self):
@@ -362,8 +442,10 @@ class XYStage:
 
         def wait():
             try:
+                self.mmc.waitForSystem()
                 self.mmc.setXYPosition(*value)
                 self.mmc.waitForDevice(self.mmc_device_name)
+                self.mmc.waitForSystem()
             except Exception as exc:
                 status.set_exception(exc)
             else:
@@ -379,19 +461,28 @@ class XYStage:
     def describe_configuration(self) -> OrderedDict:
         return OrderedDict()
 
+    # def stage(self):
+    #     try:
+    #         return super().stage()
+    #     except RedundentStage:
+    #         return []
+
 
 class SoftMMCPositioner(SignalPositionerMixin, Signal):
 
     _move_thread = None
 
     def __init__(self, *args, mmc=None, **kwargs):
-        self.mmc = get_mmc()
+        self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getXYStageDevice()
 
         super().__init__(*args, set_func=self._write_xy, **kwargs)
 
         # get the position from the controller on startup
-        self._readback = np.array(self.mmc.getXYPosition())
+        self._readback = np.array(
+            rpyc.classic.obtain(self.mmc.getXYPosition()))
 
     def _write_xy(self, value, **kwargs):
         if self._move_thread is not None:
@@ -401,13 +492,16 @@ class SoftMMCPositioner(SignalPositionerMixin, Signal):
         st = MoveStatus(self, target=value)
 
         def moveXY():
+            self.mmc.waitForSystem()
             self.mmc.setXYPosition(*value)
             # ALWAYS wait for the device
             self.mmc.waitForDevice(self.mmc_device_name)
+            self.mmc.waitForSystem()
 
             # update the _readback attribute (which triggers other ophyd actions)
             # np.array on the netref object forces conversion to np.array
-            self._readback = np.array(self.mmc.getXYPosition())
+            self._readback = np.array(
+                rpyc.classic.obtain(self.mmc.getXYPosition()))
 
             # MUST set to None BEFORE declaring status True
             self._move_thread = None
@@ -433,7 +527,7 @@ class TwoD_XY_StagePositioner(PseudoPositioner):
         """Run a forward (pseudo -> real) calculation (return pair)."""
         return self.RealPosition(pseudo_pos)
 
-    # @real_position_argument
+    @real_position_argument
     def inverse(self, real_pos):
         """Run an inverse (real -> pseudo) calculation (return x & y)."""
         if len(real_pos) == 1:
@@ -451,3 +545,54 @@ class TwoD_XY_StagePositioner(PseudoPositioner):
                 f"Incorrect argument: {self.name}.inverse({real_pos})"
             )
         return self.PseudoPosition(x=x, y=y)
+
+
+class Channel:
+    name = "channel"
+    parent = None
+
+    def __init__(self, mmc=None):
+        self.config_name = "channel"
+        self.mmc = mmc
+        if self.mmc is None:
+            self.mmc = get_mmc()
+        self.channels = self.mmc.getAvailableConfigs(self.config_name)
+
+    def read(self):
+        data = OrderedDict()
+        data['channel'] = {'value': self.mmc.getCurrentConfig(
+            self.config_name), 'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['channel'] = {'source': "MMCore",
+                           'dtype': "string",
+                           'shape': []}
+        return data
+
+    def set(self, value):
+        status = Status(obj=self, timeout=5)
+
+        def wait():
+            try:
+                self.mmc.waitForSystem()
+                self.mmc.setConfig(self.config_name, value)
+                self.mmc.waitForConfig(self.config_name, value)
+                self.mmc.waitForSystem()
+
+            except Exception as exc:
+                status.set_exception(exc)
+
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read_configuration(self) -> OrderedDict:
+        return OrderedDict()
+
+    def describe_configuration(self) -> OrderedDict:
+        return OrderedDict()

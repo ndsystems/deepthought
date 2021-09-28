@@ -1,4 +1,3 @@
-from skimage.draw import disk
 import numpy as np
 from data import db
 import napari
@@ -8,6 +7,26 @@ from bluesky_live.run_builder import RunBuilder
 from compute import axial_length, circularity
 from matplotlib.widgets import RadioButtons
 import pandas as pd
+import logging
+from tqdm import tqdm
+logger = logging.getLogger()
+logger.disabled = True
+
+
+class ChannelConfig:
+    def __init__(self, name="BF"):
+        self.name = name
+        self.exposure = None
+        self.model = None
+
+        if self.exposure is None:
+            self.auto_exposure()
+
+    def auto_exposure(self):
+        self.exposure = 100
+
+    def __repr__(self):
+        return str(self.name)
 
 
 class FoV:
@@ -31,12 +50,13 @@ class FoV:
         this information can be used by deepthought to choose
         appropriate models for visual processing"""
 
-    def __init__(self, image=None, coords=None, timestamp=None, label=None):
+    def __init__(self, image=None, coords=None, timestamp=None, label=None, model=None):
         self.image = image
         self.coords = coords
         self.timestamp = timestamp
         self.label = label
         self.entities = []
+        self.model = model
 
     def show(self):
         v = napari.view_image(self.image, show=False)
@@ -51,7 +71,7 @@ class FoV:
         self.make_entities()
 
     def _detect(self):
-        self.label = segment(self.image, "nuclei")
+        self.label = segment(self.image, **self.model)
 
     def make_entities(self):
         self._entities = find_object_properties(self.label, self.image)
@@ -103,47 +123,27 @@ class Disk:
         self.center = center
         self.diameter = 13 * 1000  # mm - > um
 
-        self.rr, self.cc = disk(self.center, self.diameter/2)
-        self.coords = [self.rr, self.cc]
-        self.num = int(self.diameter / axial_length())
-
-
-class Channel:
-    def __init__(self, name="BF"):
-        self.name = name
-        self.exposure = None
-        self.model = None
-
-        if self.exposure is None:
-            self.auto_exposure()
-
-    def auto_exposure(self):
-        self.exposure = 100
-
-    def __repr__(self):
-        return str(self.name)
-
 
 class SampleConstructor:
     def __init__(self, scope=None, form=None, channels=None):
+        self.uid = -1
         self.scope = scope
         self.form = form
         self.channels = channels
         self.fovs = []
         self._map = []
 
-    def snap(self):
+    def snap(self, num=None, delay=None):
         channel = self.channels[0]
         self.uid = self.scope.snap(
-            channel=channel.name, exposure=channel.exposure)
+            channel=channel.name, exposure=channel.exposure, num=num, delay=delay)
 
         self.access_data_header()
         self.create_fov_from_table()
         self.process_fov()
 
     def map(self, *args, **kwargs):
-        if self.scope is not None:
-            self.generate_fov()  # captures fov, creates self.uid
+
         self.access_data_header()  # creates self.header
         self.create_fov_from_table()  # creates self.fov
         self.process_fov()
@@ -153,7 +153,7 @@ class SampleConstructor:
         channel = self.channels[0]  # temp fix, for testing
 
         self.uid = self.scope.scan(
-            channel=channel.name, exposure=channel.exposure,
+            channels=channel.name, exposure=channel.exposure,
             center=self.form.center, num=self.form.num)
 
     def access_data_header(self):
@@ -172,7 +172,7 @@ class SampleConstructor:
 
             # self.set_up_incremental_insert(run)
 
-            for fov in self.fovs:
+            for fov in tqdm(self.fovs):
                 fov.detect()
                 builder.add_data("process", data={'label': [fov.label]})
                 self._map.extend(fov.entities)
@@ -185,16 +185,13 @@ class SampleConstructor:
 
         for _, row in table.iterrows():
             time = row["time"]
-            image = row["camera"]
-            coords = [row["xy_stage_x"], row["xy_stage_y"], row["z"]]
+            image = row["image"]
+            try:
+                coords = [row["xy_stage_x"], row["xy_stage_y"], row["z"]]
+            except:
+                coords = [0, 0, 0]
             self.fovs.append(FoV(image=image, coords=coords,
-                                 timestamp=time))
-
-    def plot(self):
-        xy = [e.xy for e in self._map]
-        x, y = zip(*xy)
-        plt.scatter(x, y, s=1)
-        plt.show()
+                                 timestamp=time, model=self.channels[0].model))
 
 
 class SelectFromCollection:
@@ -278,7 +275,7 @@ class SampleVisualizer:
         for (_, image_row), (_, process_row) in zip(self.image_table.iterrows(), self.process_table.iterrows()):
             coords = [image_row["xy_stage_x"],
                       image_row["xy_stage_y"], image_row["z"]]
-            image = image_row["camera"]
+            image = image_row["image"]
             label = process_row["label"]
 
             f = FoV(image=image, coords=coords, label=label)
@@ -360,28 +357,70 @@ class SampleHandler(SampleVisualizer):
         """Given a set of points, calculate the coordinates for imaging FoVs"""
         coords = self.entities[["x", "y"]]
 
+# entity-space microscopy
+
+
+class Sample:
+    """Entity represenation of the sample."""
+
+    def __init__(self, entities):
+        self.entities = entities
+
+    def get_fov(self, entities):
+        points = [e.stage_coords for e in entities]
+
+        return points
+
+    def plot(self):
+        fig, ax = plt.subplots(1)
+        ax.set_title(f"N={self.entities.shape[0]}")
+        ax.scatter(self.entities.x, self.entities.y, s=1, picker=True)
+        ax.set(xlabel="x", ylabel="y")
+
+        axcolor = 'lightgoldenrodyellow'
+        ray = plt.axes([0.05, 0.7, 0.15, 0.15], facecolor=axcolor)
+        rax = plt.axes([0.7, 0.05, 0.15, 0.15], facecolor=axcolor)
+
+        self.x_option = "x"
+        self.y_option = "y"
+
+        radio_x = RadioButtons(
+            rax, self.entities.columns.values, active=0)
+
+        radio_y = RadioButtons(
+            ray, self.entities.columns.values, active=1)
+
+        def x_selector(label):
+            self.x_option = label
+            replot()
+
+        def y_selector(label):
+            self.y_option = label
+            replot()
+
+        def replot():
+            ax.clear()
+            ax.scatter(self.entities[self.x_option],
+                       self.entities[self.y_option], s=1, picker=True)
+            ax.set_xlabel(self.x_option)
+            ax.set_ylabel(self.y_option)
+            plt.draw()
+
+        radio_x.on_clicked(x_selector)
+        radio_y.on_clicked(y_selector)
+
+        plt.show()
+
 
 if __name__ == '__main__':
-    # live cell timetraces of pcna-chromobody expressing HeLa cells.
 
-    tritc = Channel("TRITC")
-    tritc.exposure = 200
-    tritc.model = "nuclei"
+    tritc = ChannelConfig("TRITC")
+    tritc.exposure = 350
+    tritc.model = {"kind": "nuclei",
+                   "diameter": 50}
 
-    center = [-31706.9, -833.0]
-    disk = Disk(center=center)
-    disk.num = 20
-    do_image = False
+    # s = SampleConstructor(channels=[tritc])
+    # s.map()
+    # sam = Sample(s._map)
 
-    if do_image:
-        from microscope import Microscope
-        scope = Microscope()
-
-        s = SampleConstructor(scope,
-                              form=disk,
-                              channels=[tritc])
-        s.map()
-
-    v = SampleVisualizer(image_header=db[-2],
-                         process_header=db[-1])
-    v.plot()
+    s = SampleVisualizer(process_uid=-1, image_uid=-2)

@@ -21,20 +21,12 @@ def circularity(perimeter, area):
     return circularity
 
 
-def unit_pixel_length():
-    magnification_objective_lens = 100
-    image_binning = 8  # 1, 2, 4, 8
-    detector_pixel_size = 6.5  # um
+def axial_length(num_px, mag, binning, det_px_size):
+    unit_pixel_in_micron = (det_px_size /
+                            mag) * binning
 
-    unit_pixel_in_micron = (detector_pixel_size /
-                            magnification_objective_lens) * image_binning
-
-    return unit_pixel_in_micron
-
-
-def axial_length():
-    number_of_axial_pixels = 256
-
-    total_axial_length = unit_pixel_length() * number_of_axial_pixels
+    total_axial_length = unit_pixel_in_micron * num_px
 
     return total_axial_length
+
+

@@ -1,36 +1,42 @@
-import numpy as np
-from cellpose import models
-from bluesky.callbacks import broker
-from skimage import measure
+from compute import circularity, axial_length
 from viz import imshow
-from compute import circularity, unit_pixel_length
+from skimage import measure
+from bluesky.callbacks import broker
+from cellpose import models
+import logging
+logging.getLogger("cellpose").setLevel(logging.WARNING)
+import numpy as np
+from coords import rc_to_cart
 
-
-def segment(image, kind):
+def segment(image, **kwargs):
     """Segment nuclei or cyto from image using cellpose and return the label"""
-    model = models.Cellpose(gpu=0, model_type=kind)
+    kind = kwargs.get("kind")
+    diameter = kwargs.get("diameter")
 
-    output = model.eval([image], channels=[0, 0])
+    model = models.Cellpose(gpu=1, model_type=kind)
+
+    output = model.eval([image], channels=[0, 0], diameter=diameter)
 
     list_of_labels = output[0]
     return list_of_labels[0]
 
 
-def find_object_properties(label, image):
+def find_object_properties(label, image, stage_coords, pixel_size):
     regions = measure.regionprops(label, intensity_image=image)
+
+    # pixel coords
+    for reg in regions:
+        rc_coords = np.array([reg.centroid])
+        
+        coords, _ = rc_to_cart(rc_coords, image=image)
+        x, y = coords[0]
+
+        x = x * pixel_size
+        y = y * pixel_size
+
+        x_microns = np.around(x + stage_coords[0])
+        y_microns = np.around(y + stage_coords[1])
+
+        reg.xy = [x_microns, y_microns]
+    
     return regions
-
-
-def calculate_stage_coordinates(object_properties, stage_coords):
-    stage_coords = np.array(stage_coords)
-
-    x, y = object_properties["centroid-0"], object_properties["centroid-1"]
-
-    x = unit_pixel_length() * x
-    y = unit_pixel_length() * y
-
-    x = np.around(x + stage_coords[0])
-    y = np.around(y + stage_coords[1])
-
-    object_properties["xy"] = list(zip(x, y))
-    return object_properties
