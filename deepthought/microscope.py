@@ -141,20 +141,22 @@ class Microscope(BaseMicroscope):
                 frame_positions.append([x, y])
                 frame = Frame(img, [x, y], channel.model, self.unit_physical_length())
                 self.fg.add(frame)
-                if frame.count > 20:
-                    print(f"moving to {secondary_channel}")
-                    yield from plan_stubs.mv(self.ch, secondary_channel.name)
-                    yield from plan_stubs.mv(self.cam.exposure, secondary_channel.exposure)
 
-                    yield from plan_stubs.trigger_and_read(detectors)
-                    yield from plan_stubs.wait()
+                if secondary_channel is not None:
+                    if frame.count > 20:
+                        print(f"moving to {secondary_channel}")
+                        yield from plan_stubs.mv(self.ch, secondary_channel.name)
+                        yield from plan_stubs.mv(self.cam.exposure, secondary_channel.exposure)
 
-                    img = yield from plan_stubs.rd(self.cam)
-                    frame.add_secondary(img)
+                        yield from plan_stubs.trigger_and_read(detectors)
+                        yield from plan_stubs.wait()
 
-                    print(f"moving to {channel}")
-                    yield from plan_stubs.mv(self.ch, channel.name)
-                    yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
+                        img = yield from plan_stubs.rd(self.cam)
+                        frame.add_secondary(img)
+
+                        print(f"moving to {channel}")
+                        yield from plan_stubs.mv(self.ch, channel.name)
+                        yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
                 
                 self.fg.notify(frame)
 
@@ -184,36 +186,35 @@ class FrameGroupVisualizer:
         plt.tight_layout()
         plt.show(block=False)
 
-    def update(self, frame):
+    def update_map(self, frame):
         object_coords = [ob.xy for ob in frame._objects]
-        self.nuclear_size.extend([ob.area for ob in frame._objects])
-
         self.object_count += len(object_coords)
         coords_x = [_[0] for _ in object_coords]
         coords_y = [_[1] for _ in object_coords]
-        
-        intensity_primary = [ob.intensity_image.mean() for ob in frame._objects]
-    
-        intensity_secondary = [ob.intensity_image.mean() for ob in frame.secondary_objects]
 
-        if self.frame_n == 1:
-            self.ax[0].set_title(f"N = {self.object_count} from {self.frame_n} frames")
-            self.ax[0].scatter(coords_x, coords_y,  s=7)
-            self.ax[1].hist(self.nuclear_size)
-            if len(intensity_secondary) >= 0:
-                self.ax[2].scatter(intensity_primary, intensity_secondary,  s=7)
+        self.ax[0].set_title(f"N = {self.object_count} from {self.frame_n} frames")
+        self.ax[0].scatter(coords_x, coords_y,  s=7)
 
+    def update_nuclear_size(self, frame):
+        self.nuclear_size.extend([ob.area for ob in frame._objects])
+        self.ax[1].hist(self.nuclear_size)
+        self.ax[1].cla()
+        self.ax[1].set_xlabel("Nuclear Size")
+        self.ax[1].set_ylabel("Frequency")
+        self.ax[1].hist(self.nuclear_size)
+
+    def update_intensities(self, frame):
+        if len(frame.secondary_objects) > 0:
+            intensity_primary = [ob.intensity_image.mean() for ob in frame._objects]
+            intensity_secondary = [ob.intensity_image.mean() for ob in frame.secondary_objects]
         else:
-            self.ax[0].set_title(f"N = {self.object_count} from {self.frame_n} frames")
-            self.ax[0].scatter(coords_x, coords_y,  s=7)
-            self.ax[1].cla()
-            self.ax[1].set_xlabel("Nuclear Size")
-            self.ax[1].set_ylabel("Frequency")
-            self.ax[1].hist(self.nuclear_size)
-        
-            if len(intensity_secondary) >= 0:
-                self.ax[2].scatter(intensity_primary, intensity_secondary,  s=7)
+            intensity_secondary = []
+        self.ax[2].scatter(intensity_primary, intensity_secondary,  s=7)
 
+
+    def update(self, frame):
+        self.update_map(frame)
+        self.update_nuclear_size(frame)
         self.frame_n += 1
         self.fig.canvas.draw()
 
