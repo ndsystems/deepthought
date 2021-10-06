@@ -77,10 +77,20 @@ class BaseMicroscope:
         ax_len = axial_length(num_px, mag, binning, det_px_size)
         return ax_len
 
-    def generate_positions(self, relative=True):
-        positions = [[self.estimate_axial_length(), 0]] * 10 + [[0, self.estimate_axial_length()]] * 10
-        positions = positions + [[-self.estimate_axial_length(), 0]] * 10 + [[0, -self.estimate_axial_length()]] * 10
-        return positions
+    def generate_grid(self, initial_x, initial_y, num):
+        width = self.estimate_axial_length()/2
+        
+        start_x = initial_x - (width*num) 
+        stop_x = (width*num) + initial_x
+        
+        start_y = initial_y - (width*num)
+        stop_y = (width*num) + initial_y
+
+        x_positions = np.linspace(start_x, stop_x, num)
+        y_positions = np.linspace(start_y, stop_y, num)
+        
+        xx, yy = np.meshgrid(x_positions, y_positions)
+        return xx, yy
 
 class Microscope(BaseMicroscope):
     def __init__(self):
@@ -117,9 +127,15 @@ class Microscope(BaseMicroscope):
     def scan(self, positions=None, channel=None, secondary_channel=None, num=100):
         detectors = [self.cam, self.stage,
                      self.z, self.ch, self.cam.exposure]
-        
+
+        initial_x = yield from plan_stubs.rd(self.stage.x)
+        initial_y = yield from plan_stubs.rd(self.stage.y)
+
         if positions is None:
-            positions = self.generate_positions()
+            x_pos_grid, y_pos_grid = self.generate_grid(initial_x=initial_x, initial_y=initial_y, num=10)
+
+            x_pos_grid = x_pos_grid.ravel()
+            y_pos_grid = y_pos_grid.ravel()
 
         if channel is not None:
             print(f"moving to {channel}")
@@ -130,7 +146,8 @@ class Microscope(BaseMicroscope):
             frame_positions = []
             yield from plan_stubs.open_run()
 
-            for pos in positions:
+            for x_pos, y_pos in zip(x_pos_grid, y_pos_grid):
+                print(x_pos, y_pos)
                 x = yield from plan_stubs.rd(self.stage.x)
                 y = yield from plan_stubs.rd(self.stage.y)
 
@@ -163,8 +180,8 @@ class Microscope(BaseMicroscope):
                 if self.fg.count >= num:
                     break
 
-                yield from plan_stubs.mvr(self.stage.x, pos[0])
-                yield from plan_stubs.mvr(self.stage.y, pos[1])
+                yield from plan_stubs.mv(self.stage.x, float(x_pos))
+                yield from plan_stubs.mv(self.stage.y, float(y_pos))
                 
             yield from plan_stubs.close_run()
 
