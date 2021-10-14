@@ -3,9 +3,9 @@ import numpy as np
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky import RunEngine, plans, plan_stubs, plan_patterns, utils
 from bluesky import preprocessors as bpp
-from devices import Camera, Focus, TwoD_XY_StagePositioner, get_mmc, Channel, AutoFocus, SoftMMCPositioner
+from devices import Camera, Focus, Channel, AutoFocus, XYStage
 from compute import axial_length
-from bluesky.callbacks.broker import post_run, BrokerCallbackBase
+from bluesky.callbacks.broker import BrokerCallbackBase
 from data import db
 import napari
 from detection import segment, find_object_properties
@@ -51,14 +51,14 @@ class ChannelConfig:
         return str(self.name)
 
 class BaseMicroscope:
-    def __init__(self):
-        self.name = None
-        self.mmc = get_mmc()
+    def __init__(self, name=None, mmc=None):
+        self.name = name
+        self.mmc = mmc
         self.cam = Camera(self.mmc)
         self.z = Focus(self.mmc)
         self.ch = Channel(self.mmc)
         self.af = AutoFocus(self.mmc)
-        self.stage = TwoD_XY_StagePositioner("", name="xy_stage")
+        self.stage = XYStage(self.mmc)
     
     def unit_physical_length(self):
         num_px = 2048
@@ -81,10 +81,10 @@ class BaseMicroscope:
         width = self.estimate_axial_length()/2
         
         start_x = initial_x - (width*num) 
-        stop_x = (width*num) + initial_x
+        stop_x = (width*(num+1)) + initial_x
         
         start_y = initial_y - (width*num)
-        stop_y = (width*num) + initial_y
+        stop_y = (width*(num+1)) + initial_y
 
         x_positions = np.linspace(start_x, stop_x, num)
         y_positions = np.linspace(start_y, stop_y, num)
@@ -93,8 +93,8 @@ class BaseMicroscope:
         return xx, yy
 
 class Microscope(BaseMicroscope):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, mmc):
+        super().__init__(mmc=mmc)
         self.fg = FrameGroup()
         self.fv = FrameGroupVisualizer()
         self.fg.subscribe(self.fv)
@@ -115,25 +115,22 @@ class Microscope(BaseMicroscope):
                 yield from plan_stubs.wait()
 
                 img = yield from plan_stubs.rd(self.cam)
-                x = yield from plan_stubs.rd(self.stage.x)
-                y = yield from plan_stubs.rd(self.stage.y)
+                x, y = yield from plan_stubs.rd(self.stage)
                 self.fg.add(Frame(img, [x, y], channel.model, self.unit_physical_length()))
 
-                yield from plan_stubs.mvr(self.stage.x, -self.estimate_axial_length())
+                yield from plan_stubs.mvr(self.stage, [0, -self.estimate_axial_length()])
             yield from plan_stubs.close_run()
 
         yield from inner_loop()
 
-    def scan(self, positions=None, channel=None, secondary_channel=None, num=100):
+    def scan(self, positions=None, channel=None, secondary_channels=None, num=1):
         detectors = [self.cam, self.stage,
                      self.z, self.ch, self.cam.exposure]
 
-        initial_x = yield from plan_stubs.rd(self.stage.x)
-        initial_y = yield from plan_stubs.rd(self.stage.y)
+        initial_x, initial_y = yield from plan_stubs.rd(self.stage)
 
         if positions is None:
             x_pos_grid, y_pos_grid = self.generate_grid(initial_x=initial_x, initial_y=initial_y, num=10)
-
             x_pos_grid = x_pos_grid.ravel()
             y_pos_grid = y_pos_grid.ravel()
 
@@ -147,42 +144,40 @@ class Microscope(BaseMicroscope):
             yield from plan_stubs.open_run()
 
             for x_pos, y_pos in zip(x_pos_grid, y_pos_grid):
-                print(x_pos, y_pos)
-                x = yield from plan_stubs.rd(self.stage.x)
-                y = yield from plan_stubs.rd(self.stage.y)
+                yield from plan_stubs.mv(self.stage, [float(x_pos), float(y_pos)])
+                
+                x, y = yield from plan_stubs.rd(self.stage)
 
                 yield from plan_stubs.trigger_and_read(detectors)
                 yield from plan_stubs.wait()
 
                 img = yield from plan_stubs.rd(self.cam)
                 frame_positions.append([x, y])
-                frame = Frame(img, [x, y], channel.model, self.unit_physical_length())
+                frame = Frame(channel.name, img, [x, y], channel.model, self.unit_physical_length())
                 self.fg.add(frame)
 
-                if secondary_channel is not None:
-                    if frame.count > 20:
-                        print(f"moving to {secondary_channel}")
-                        yield from plan_stubs.mv(self.ch, secondary_channel.name)
-                        yield from plan_stubs.mv(self.cam.exposure, secondary_channel.exposure)
+                if secondary_channels is not None:
+                    if frame.count > 3:
+                        for ch in secondary_channels:
+                            print(f"moving to {ch}")
+                            yield from plan_stubs.mv(self.ch, ch.name)
+                            yield from plan_stubs.mv(self.cam.exposure, ch.exposure)
 
-                        yield from plan_stubs.trigger_and_read(detectors)
-                        yield from plan_stubs.wait()
+                            yield from plan_stubs.trigger_and_read(detectors)
+                            yield from plan_stubs.wait()
 
-                        img = yield from plan_stubs.rd(self.cam)
-                        frame.add_secondary(img)
-
+                            img = yield from plan_stubs.rd(self.cam)
+                            frame.add_secondary(img, ch)
+                            
                         print(f"moving to {channel}")
                         yield from plan_stubs.mv(self.ch, channel.name)
                         yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
-                
+                    
                 self.fg.notify(frame)
 
                 if self.fg.count >= num:
                     break
 
-                yield from plan_stubs.mv(self.stage.x, float(x_pos))
-                yield from plan_stubs.mv(self.stage.y, float(y_pos))
-                
             yield from plan_stubs.close_run()
 
         yield from inner_loop()
@@ -195,8 +190,6 @@ class FrameGroupVisualizer:
         self.ax[1].set_ylabel("Frequency")
         self.ax[0].set_xlabel("Stage X (um)")
         self.ax[0].set_ylabel("Stage Y (um)")
-        self.ax[2].set_xlabel("DAPI mean")
-        self.ax[2].set_ylabel("FITC mean")
         self.frame_n = 1
         self.object_count = 0
         self.nuclear_size = []
@@ -221,17 +214,17 @@ class FrameGroupVisualizer:
         self.ax[1].hist(self.nuclear_size)
 
     def update_intensities(self, frame):
-        if len(frame.secondary_objects) > 0:
-            intensity_primary = [ob.intensity_image.mean() for ob in frame._objects]
-            intensity_secondary = [ob.intensity_image.mean() for ob in frame.secondary_objects]
-        else:
-            intensity_secondary = []
-        self.ax[2].scatter(intensity_primary, intensity_secondary,  s=7)
-
-
+        if len(frame.secondary_images) > 1:
+            self.ax[2].set_xlabel(f"{frame.secondary_images[0].channel} mean")
+            self.ax[2].set_ylabel(f"{frame.secondary_images[1].channel} mean")
+            intensity_secondary = [ob.intensity_image.mean() for ob in frame.secondary_images[0]._objects]
+            intensity_secondary_2 = [ob.intensity_image.mean() for ob in frame.secondary_images[1]._objects]
+            self.ax[2].scatter(intensity_secondary, intensity_secondary_2,  s=7)
+    
     def update(self, frame):
         self.update_map(frame)
         self.update_nuclear_size(frame)
+        self.update_intensities(frame)
         self.frame_n += 1
         self.fig.canvas.draw()
 
@@ -259,13 +252,12 @@ class FrameGroup:
         return self.frames[item]
 
 
-
 class Frame:
-    def __init__(self, image, coords, model, pixel_size):
+    def __init__(self, channel, image, coords, model, pixel_size):
+        self.channel = channel
         self.image = image
-        self.secondary_image = None
+        self.secondary_images = []
         self._objects = []
-        self.secondary_objects = []
         self.coords = coords
         self.pixel_size = pixel_size
         self.model = model
@@ -276,17 +268,36 @@ class Frame:
         self.count = len(self._objects)
         return self.label, self._objects
 
-    def add_secondary(self, image):
-        self.secondary_image = image
-        self.secondary_objects = find_object_properties(self.label, self.secondary_image, self.coords, self.pixel_size)
-
     def view(self):
         v = napari.view_image(self.image)
-        v.view_image(self.secondary_image)
+        for img in self.secondary_images:
+            v.view_image(img.image)
         v.add_labels(self.label)
+
+    def add_label(self, label):
+        self.label = label
+        self._objects = find_object_properties(self.label, self.image, self.coords, self.pixel_size)
+
+    def add_secondary(self, image, ch):
+        f = Frame(channel=ch.name, image=image, coords=self.coords, model=ch.model, pixel_size=self.pixel_size)
+        f.add_label(self.label)
+        self.secondary_images.append(f)
+
 
 def inspect_plan(plan):
     msgs = list(plan)
     for m in msgs:
         print(m)
 
+
+
+# pcna time series for 24h - 100+ cells
+# pcna time series with NCS low dose (0.1ug/ml)
+#   * 6h
+
+# h2b- control cells - 2h /every 5minutes
+#   * 1ug/ml NCS
+#   * anisotropy imaging
+
+
+# cumulitivate histogram of intensity vs frequency

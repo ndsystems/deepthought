@@ -31,22 +31,35 @@ import warnings
 from comms import client
 import rpyc
 
-mmc = None
 
+class MMCoreInterface:
+    def __init__(self):
+        self.clients = dict()
+        self.named = dict()
+    
+    def add(self, ip_addr, name):
+        if ip_addr not in self.clients.keys():
+            try:
+                mmc = self.connect_client(ip_addr)
+                self.clients[ip_addr] = mmc
+                self.named[name] = mmc
 
-def get_mmc():
-    global mmc
+            except ConnectionError:
+                print("connection failed")
 
-    if mmc is None:
-        mmc = client(addr="10.10.1.35", port=18861).mmc
-    return mmc
+    def connect_client(self, addr):
+        mmc = client(addr=addr, port=18861).mmc
+        return mmc
 
+    def __getitem__(self, name):
+        return self.named[name]
+
+    def __repr__(self):
+        return str(self.named)
 
 class BaseScope:
     def __init__(self, mmc=None):
         self.mmc = mmc
-        if self.mmc is None:
-            self.mmc = get_mmc()
 
     def device_properties(self, device):
         """get property names and values for the given device"""
@@ -146,8 +159,6 @@ class Focus:
 
     def __init__(self, mmc=None):
         self.mmc = mmc
-        if self.mmc is None:
-            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getFocusDevice()
         self.position = self.mmc.getPosition()
 
@@ -250,8 +261,6 @@ class Camera:
 
     def __init__(self, mmc=None, **kwargs):
         self.mmc = mmc
-        if self.mmc is None:
-            self.mmc = get_mmc()
         self.cam_name = "left_port"
         self.exposure = Exposure(self.mmc)
         self.mmc_device_name = str(self.mmc.getCameraDevice())
@@ -328,8 +337,6 @@ class AutoFocus:
     def __init__(self, mmc=None, **kwargs):
         self.mmc = mmc
         self._subscribers = []
-        if self.mmc is None:
-            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getAutoFocusDevice()
 
     def trigger(self):
@@ -407,8 +414,6 @@ class XYStage:
 
     def __init__(self, mmc=None):
         self.mmc = mmc
-        if self.mmc is None:
-            self.mmc = get_mmc()
         self.mmc_device_name = self.mmc.getXYStageDevice()
 
     def trigger(self):
@@ -462,91 +467,6 @@ class XYStage:
     def describe_configuration(self) -> OrderedDict:
         return OrderedDict()
 
-    # def stage(self):
-    #     try:
-    #         return super().stage()
-    #     except RedundentStage:
-    #         return []
-
-
-class SoftMMCPositioner(SignalPositionerMixin, Signal):
-
-    _move_thread = None
-
-    def __init__(self, *args, mmc=None, **kwargs):
-        self.mmc = mmc
-        if self.mmc is None:
-            self.mmc = get_mmc()
-        self.mmc_device_name = self.mmc.getXYStageDevice()
-
-        super().__init__(*args, set_func=self._write_xy, **kwargs)
-
-        # get the position from the controller on startup
-        self._readback = np.array(
-            rpyc.classic.obtain(self.mmc.getXYPosition()))
-
-    def _write_xy(self, value, **kwargs):
-        if self._move_thread is not None:
-            # The MoveStatus object defends us; this is just an additional safeguard.
-            # Do not ever expect to see this warning.
-            warnings.warn("Already moving.  Will not start new move.")
-        st = MoveStatus(self, target=value)
-
-        def moveXY():
-            self.mmc.waitForSystem()
-            self.mmc.setXYPosition(*value)
-            # ALWAYS wait for the device
-            self.mmc.waitForDevice(self.mmc_device_name)
-            self.mmc.waitForSystem()
-
-            # update the _readback attribute (which triggers other ophyd actions)
-            # np.array on the netref object forces conversion to np.array
-            self._readback = np.array(
-                rpyc.classic.obtain(self.mmc.getXYPosition()))
-
-            # MUST set to None BEFORE declaring status True
-            self._move_thread = None
-            st.set_finished()
-
-        self._move_thread = threading.Thread(target=moveXY)
-        self._move_thread.start()
-        return st
-
-
-class TwoD_XY_StagePositioner(PseudoPositioner):
-
-    # The pseudo positioner axes:
-    x = Component(PseudoSingle, target_initial_position=True)
-    y = Component(PseudoSingle, target_initial_position=True)
-
-    # The real (or physical) positioners:
-    # NOTE: ``mmc`` object MUST be defined`` first.
-    pair = Component(SoftMMCPositioner, mmc=get_mmc())
-
-    @pseudo_position_argument
-    def forward(self, pseudo_pos):
-        """Run a forward (pseudo -> real) calculation (return pair)."""
-        return self.RealPosition(pseudo_pos)
-
-    @real_position_argument
-    def inverse(self, real_pos):
-        """Run an inverse (real -> pseudo) calculation (return x & y)."""
-        if len(real_pos) == 1:
-            if real_pos.pair is None:
-                # as called from .move()
-                x, y = self.pair.mmc.getXYPosition()
-            else:
-                # initial call, get position from the hardware
-                x, y = tuple(real_pos.pair)
-        elif len(real_pos) == 2:
-            # as called directly
-            x, y = real_pos
-        else:
-            raise ValueError(
-                f"Incorrect argument: {self.name}.inverse({real_pos})"
-            )
-        return self.PseudoPosition(x=x, y=y)
-
 
 class Channel:
     name = "channel"
@@ -555,8 +475,6 @@ class Channel:
     def __init__(self, mmc=None):
         self.config_name = "channel"
         self.mmc = mmc
-        if self.mmc is None:
-            self.mmc = get_mmc()
         self.channels = self.mmc.getAvailableConfigs(self.config_name)
 
     def read(self):
