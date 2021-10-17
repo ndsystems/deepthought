@@ -11,6 +11,8 @@ import napari
 from detection import segment, find_object_properties
 import matplotlib.pyplot as plt
 import threading
+from optimization import shannon_dct
+
 
 bec = BestEffortCallback()
 bec.disable_plots()
@@ -98,6 +100,7 @@ class Microscope(BaseMicroscope):
         self.fg = FrameGroup()
         self.fv = FrameGroupVisualizer()
         self.fg.subscribe(self.fv)
+        self.region = None
 
     def snap(self, positions=None, channel=None, num=1):
         detectors = [self.cam, self.stage,
@@ -116,12 +119,38 @@ class Microscope(BaseMicroscope):
 
                 img = yield from plan_stubs.rd(self.cam)
                 x, y = yield from plan_stubs.rd(self.stage)
-                self.fg.add(Frame(img, [x, y], channel.model, self.unit_physical_length()))
+                self.fg.add(Frame(channel.name, img, [x, y], channel.model, self.unit_physical_length()))
 
-                yield from plan_stubs.mvr(self.stage, [0, -self.estimate_axial_length()])
             yield from plan_stubs.close_run()
 
         yield from inner_loop()
+
+    def focus(self, channel):
+        yield from plan_stubs.open_run()
+
+        if channel is not None:
+            print(f"moving to {channel}")
+            yield from plan_stubs.mv(self.ch, channel.name)
+            yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
+
+        detectors = [self.cam, self.stage,
+                     self.z, self.ch, self.cam.exposure]
+
+
+        positions = np.linspace(2250, 2300, 10)
+
+        for pos in positions:
+            yield from plan_stubs.mv(self.z, pos)
+
+            # take an image
+            yield from plan_stubs.trigger_and_read(detectors)
+            img = yield from plan_stubs.rd(self.cam)
+
+            # calculate shannon_dct
+            focus_val = shannon_dct(img)
+            print(focus_val, pos)
+
+        yield from plan_stubs.close_run()
 
     def scan(self, positions=None, channel=None, secondary_channels=None, num=1):
         detectors = [self.cam, self.stage,
