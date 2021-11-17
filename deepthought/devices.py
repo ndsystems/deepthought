@@ -52,10 +52,17 @@ class MMCoreInterface:
         return mmc
 
     def __getitem__(self, name):
+        if type(name) is int:
+            index = name
+            key_of_index = list(self.named.keys())[index]
+            return self.named[key_of_index]
         return self.named[name]
 
     def __repr__(self):
         return str(self.named)
+
+    def __iter__(self):
+        return next(self.clients)
 
 class BaseScope:
     def __init__(self, mmc=None):
@@ -160,7 +167,6 @@ class Focus:
     def __init__(self, mmc=None):
         self.mmc = mmc
         self.mmc_device_name = self.mmc.getFocusDevice()
-        self.position = self.mmc.getPosition()
 
     def read(self):
         data = OrderedDict()
@@ -179,11 +185,8 @@ class Focus:
 
         def wait():
             try:
-                self.mmc.waitForSystem()
                 self.mmc.setPosition(float(value))
                 self.mmc.waitForDevice(self.mmc_device_name)
-                self.mmc.waitForSystem()
-                self.position = self.mmc.getPosition()
             except Exception as exc:
                 status.set_exception(exc)
             else:
@@ -222,9 +225,7 @@ class Exposure:
 
         def wait():
             try:
-                self.mmc.waitForSystem()
                 self.mmc.setExposure(value)
-                self.mmc.waitForSystem()
 
             except Exception as exc:
                 status.set_exception(exc)
@@ -265,7 +266,6 @@ class Camera:
         self.exposure = Exposure(self.mmc)
         self.mmc_device_name = str(self.mmc.getCameraDevice())
 
-        self.image = None
         self._subscribers = []
 
     def _collection_callback(self):
@@ -273,15 +273,13 @@ class Camera:
             threading.Thread(target=subscriber).start()
 
     def trigger(self):
-        status = Status(obj=self, timeout=10)
+        status = Status(obj=self, timeout=30)
 
         def wait():
             try:
-                self.mmc.waitForSystem()
                 self.image_time = time.time()
                 self.mmc.snapImage()
                 self.mmc.waitForDevice(self.mmc_device_name)
-                self.mmc.waitForSystem()
 
                 self.image = rpyc.classic.obtain(self.mmc.getImage())
 
@@ -344,9 +342,7 @@ class AutoFocus:
 
         def wait():
             try:
-                self.mmc.waitForSystem()
                 self.mmc.waitForDevice(self.mmc_device_name)
-                self.mmc.waitForSystem()
 
             except Exception as exc:
                 status.set_exception(exc)
@@ -364,16 +360,12 @@ class AutoFocus:
         def wait():
             try:
                 if type(value) is bool:
-                    self.mmc.waitForSystem()
                     self.mmc.enableContinuousFocus(value)
                     self.mmc.waitForDevice(self.mmc_device_name)
-                    self.mmc.waitForSystem()
 
                 elif type(value) is float:
-                    self.mmc.waitForSystem()
                     self.mmc.setAutoFocusOffset(value)
                     self.mmc.waitForDevice(self.mmc_device_name)
-                    self.mmc.waitForSystem()
 
             except Exception as exc:
                 status.set_exception(exc)
@@ -432,15 +424,15 @@ class XYStage:
 
     def read(self):
         data = OrderedDict()
-        data['xy'] = {'value': self.mmc.getXYPosition(),
+        data['xy'] = {'value': np.array(self.mmc.getXYPosition()),
                       'timestamp': time.time()}
         return data
 
     def describe(self):
         data = OrderedDict()
         data['xy'] = {'source': "MMCore",
-                      'dtype': "number",
-                      'shape': []}
+                      'dtype': "array",
+                      'shape': [2,]}
         return data
 
     def set(self, value):
@@ -448,10 +440,8 @@ class XYStage:
 
         def wait():
             try:
-                self.mmc.waitForSystem()
                 self.mmc.setXYPosition(*value)
                 self.mmc.waitForDevice(self.mmc_device_name)
-                self.mmc.waitForSystem()
             except Exception as exc:
                 status.set_exception(exc)
             else:
@@ -495,10 +485,8 @@ class Channel:
 
         def wait():
             try:
-                self.mmc.waitForSystem()
                 self.mmc.setConfig(self.config_name, value)
                 self.mmc.waitForConfig(self.config_name, value)
-                self.mmc.waitForSystem()
 
             except Exception as exc:
                 status.set_exception(exc)
