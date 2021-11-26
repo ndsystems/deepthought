@@ -1,18 +1,12 @@
-from cycler import cycler
 import numpy as np
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky import RunEngine, plans, plan_stubs, plan_patterns, utils
-from bluesky import preprocessors as bpp
 from devices import Camera, Focus, Channel, AutoFocus, XYStage
 from compute import axial_length
-from bluesky.callbacks.broker import BrokerCallbackBase
 from data import db
-import napari
-import matplotlib.pyplot as plt
 import threading
 from optimization import shannon_dct
 from scanspec.specs import Line
-import pickle
 
 bec = BestEffortCallback()
 bec.disable_plots()
@@ -20,12 +14,6 @@ bec.disable_plots()
 RE = RunEngine({})
 RE.subscribe(bec)
 RE.subscribe(db.insert)
-
-
-def images_from_uid(uid):
-    header = db[uid]
-    imgs = np.stack(header.table()["image"].to_numpy())
-    return imgs
 
 
 class Disk:
