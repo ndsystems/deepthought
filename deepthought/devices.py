@@ -181,7 +181,7 @@ class Focus:
         return data
 
     def set(self, value):
-        status = Status(obj=self, timeout=5)
+        status = Status(obj=self, timeout=10)
 
         def wait():
             try:
@@ -221,7 +221,7 @@ class Exposure:
         return status
 
     def set(self, value):
-        status = Status(obj=self, timeout=5)
+        status = Status(obj=self, timeout=10)
 
         def wait():
             try:
@@ -355,7 +355,7 @@ class AutoFocus:
         return status
 
     def set(self, value):
-        status = Status(obj=self, timeout=5)
+        status = Status(obj=self, timeout=10)
 
         def wait():
             try:
@@ -436,7 +436,7 @@ class XYStage:
         return data
 
     def set(self, value):
-        status = Status(obj=self, timeout=5)
+        status = Status(obj=self, timeout=10)
 
         def wait():
             try:
@@ -481,7 +481,7 @@ class Channel:
         return data
 
     def set(self, value):
-        status = Status(obj=self, timeout=5)
+        status = Status(obj=self, timeout=10)
 
         def wait():
             try:
