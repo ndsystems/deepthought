@@ -27,6 +27,12 @@ fitc.model = {"kind": "nuclei",
                 "diameter": 100}
 
 
+
+bf = ChannelConfig("BF")
+bf.exposure = "auto"
+bf.model = {"kind": "cyto",
+                "diameter": 150}
+
 def snap_image(mmc):
     mmc.snapImage()
     img = mmc.getImage()
@@ -38,21 +44,36 @@ layer = v.add_image(np.random.randint(0, 4095, (2048, 2048)))
 
 def napari_viewer(event, document):
     if event == "event":
-        img = document["data"]["image"]
-        layer.data = img
+        if "image" in document["data"]:
+            img = document["data"]["image"]
+            try:
+                layer.data = img
+            except:
+                pass
 
+
+def per_step_xy(image):
+    img  = image
 
 if __name__ == "__main__":
+    """    # experiment with anisotropy
+    
+    # step 1 - map the sample with eva green
+    # step 2 - identify coordinates to image
+    # step 3 - align map_eg to map_bs
+    # step 4 - timelapse objects of interest
+    # 
+    """    
+    
     scopes = MMCoreInterface()
     scopes.add("10.10.1.35", "bright_star")
     scopes.add("10.10.1.57", "eva_green")
     
-    m_1 = Microscope(mmc=scopes["bright_star"])
-    # m_2 = Microscope(mmc=scopes["eva_green"])
+    m = Microscope(mmc=scopes["bright_star"])
+    # m.mmc.setXYPosition(0, 0)
+    
+    plan = m.scan_grid(channels=[fitc, bf], per_step_xy=per_step_xy)
 
-    plan = m_1.scan(channel=dapi, secondary_channels=[fitc, cy5], num=5000)
-
-    # plan = m_1.focus(channel=dapi)
     RE.subscribe(napari_viewer)
 
     uid, = RE(plan)

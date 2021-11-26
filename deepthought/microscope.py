@@ -8,11 +8,11 @@ from compute import axial_length
 from bluesky.callbacks.broker import BrokerCallbackBase
 from data import db
 import napari
-from detection import segment, find_object_properties
 import matplotlib.pyplot as plt
 import threading
 from optimization import shannon_dct
-
+from scanspec.specs import Line
+import pickle
 
 bec = BestEffortCallback()
 bec.disable_plots()
@@ -62,22 +62,21 @@ class BaseMicroscope:
         self.af = AutoFocus(self.mmc)
         self.stage = XYStage(self.mmc)
     
-    def unit_physical_length(self):
-        num_px = 2048
-        mag = 60
-        binning = 1
-        det_px_size = 6.5  # um
-        unit_pixel_in_micron = (det_px_size / mag) * binning
-
-        return unit_pixel_in_micron
-
     def estimate_axial_length(self):
-        num_px = 2048
-        mag = 60
-        binning = 1
-        det_px_size = 6.5  # um
+        num_px = self.mmc.getImageWidth()
+        
+        obj_state = int(self.mmc.getProperty( "Objective", "State"))
+        if obj_state == 4:
+            mag = 100
+        elif obj_state == 3:
+            mag = 60
+        binning = int(self.mmc.getProperty("left_port", "Binning")[0])
+
+        det_px_size = 6.5  # um for andor zyla
         ax_len = axial_length(num_px, mag, binning, det_px_size)
+
         return ax_len
+
 
     def generate_grid(self, initial_x, initial_y, num):
         width = self.estimate_axial_length()/2
@@ -88,128 +87,94 @@ class BaseMicroscope:
         start_y = initial_y - (width*num)
         stop_y = (width*(num+1)) + initial_y
 
-        x_positions = np.linspace(start_x, stop_x, num)
-        y_positions = np.linspace(start_y, stop_y, num)
-        
-        xx, yy = np.meshgrid(x_positions, y_positions)
-        return xx, yy
+        spec = Line("y", start_y, stop_y, num) * Line("x", start_x, stop_x, num)
+        return spec
 
 class Microscope(BaseMicroscope):
     def __init__(self, mmc):
         super().__init__(mmc=mmc)
-        self.fg = FrameGroup()
-        self.fv = FrameGroupVisualizer()
-        self.fg.subscribe(self.fv)
-        self.region = None
+        self.detectors = [self.stage,
+                     self.z, self.ch, self.cam.exposure, self.cam]
 
-    def snap(self, positions=None, channel=None, num=1):
-        detectors = [self.cam, self.stage,
-                     self.z, self.ch, self.cam.exposure]
+    def auto_exposure(self):
+        # adapted from 
+        # https://github.com/mdcurtis/micromanager-upstream/blob/master/scripts/AutoExpose.bsh
 
-        if channel is not None:
-            print(f"moving to {channel}")
-            yield from plan_stubs.mv(self.ch, channel.name)
+        max_possible = 4095
+        max_exposure = 5000
+        saturated = 0.95
+        too_bright = 5
+        aim = 0.5
+        low_fraction = 0.5
+
+        # snap image
+        yield from self.snap_image_and_other_readings_too()
+        img = yield from plan_stubs.rd(self.cam)
+        exposure = yield from plan_stubs.rd(self.cam.exposure)
+        
+        max_value = img.max()
+        
+        if max_value > (max_possible * saturated):
+            next_exposure = (1/too_bright) * exposure
+            print(f"too bright! next_exposure: {next_exposure}")
+            yield from plan_stubs.mv(self.cam.exposure, next_exposure)
+            yield from auto_exposure()
+        
+        next_exposure = aim * max_possible / max_value * exposure
+        
+        if next_exposure > max_exposure:
+            return
+        
+        yield from plan_stubs.mv(self.cam.exposure, int(next_exposure))
+        
+        if (max_value/max_possible) > low_fraction:
+            yield from auto_exposure()
+        
+    def snap_image_and_other_readings_too(self):
+        try:
+            yield from plan_stubs.trigger_and_read(self.detectors)
+            yield from plan_stubs.wait()
+        except utils.FailedStatus:
+            print("RECOVERING FROM FAILURE")
+            yield from plan.plan_stubs.sleep(5)
+            yield from self.snap_image_and_other_readings_too()
+
+    def set_channel(self, channel):
+        yield from plan_stubs.mv(self.ch, channel.name)
+        if channel.exposure == "auto":
+            yield from self.auto_exposure()
+        else:
             yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
+
+
+    def scan_grid(self, channels, per_step_xy=None):
+        # create a grid
+        initial_x, initial_y = yield from plan_stubs.rd(self.stage)
+        grid = self.generate_grid(initial_x=initial_x, initial_y=initial_y, num=2)
 
         def inner_loop():
-            yield from plan_stubs.open_run()
-            for _ in range(num):
-                yield from plan_stubs.trigger_and_read(detectors)
-                yield from plan_stubs.wait()
+            # iterate thru the scanspec object for grid
+            for point in grid.midpoints():
+                # scanspec to device definition adapter
+                coords = [float(point["x"]), float(point["y"])]
+                yield from plan_stubs.mv(self.stage, coords)
+                for channel in channels:
+                    yield from self.set_channel(channel)
+                    yield from self.snap_image_and_other_readings_too()
+                    img = yield from plan_stubs.rd(self.cam)
+                    x, y = yield from plan_stubs.rd(self.stage)
+                    if per_step_xy is not None:
+                        try:
+                            per_step_xy(img)
+                        except:
+                            print('error running func on image')
+                            pass
 
-                img = yield from plan_stubs.rd(self.cam)
-                x, y = yield from plan_stubs.rd(self.stage)
-                self.fg.add(Frame(channel.name, img, [x, y], channel.model, self.unit_physical_length()))
-
-            yield from plan_stubs.close_run()
-
-        yield from inner_loop()
-
-    def focus(self, channel):
         yield from plan_stubs.open_run()
-
-        if channel is not None:
-            print(f"moving to {channel}")
-            yield from plan_stubs.mv(self.ch, channel.name)
-            yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
-
-        detectors = [self.cam, self.stage,
-                     self.z, self.ch, self.cam.exposure]
-
-
-        positions = np.linspace(2250, 2300, 10)
-
-        for pos in positions:
-            yield from plan_stubs.mv(self.z, pos)
-
-            # take an image
-            yield from plan_stubs.trigger_and_read(detectors)
-            img = yield from plan_stubs.rd(self.cam)
-
-            # calculate shannon_dct
-            focus_val = shannon_dct(img)
-            print(focus_val, pos)
-
+        yield from inner_loop()
         yield from plan_stubs.close_run()
 
-    def scan(self, positions=None, channel=None, secondary_channels=None, num=1):
-        detectors = [self.cam, self.stage,
-                     self.z, self.ch, self.cam.exposure]
-
-        initial_x, initial_y = yield from plan_stubs.rd(self.stage)
-
-        if positions is None:
-            x_pos_grid, y_pos_grid = self.generate_grid(initial_x=initial_x, initial_y=initial_y, num=10)
-            x_pos_grid = x_pos_grid.ravel()
-            y_pos_grid = y_pos_grid.ravel()
-
-        if channel is not None:
-            print(f"moving to {channel}")
-            yield from plan_stubs.mv(self.ch, channel.name)
-            yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
-
-        def inner_loop():
-            frame_positions = []
-            yield from plan_stubs.open_run()
-
-            for x_pos, y_pos in zip(x_pos_grid, y_pos_grid):
-                yield from plan_stubs.mv(self.stage, [float(x_pos), float(y_pos)])
-                
-                x, y = yield from plan_stubs.rd(self.stage)
-
-                yield from plan_stubs.trigger_and_read(detectors)
-                yield from plan_stubs.wait()
-
-                img = yield from plan_stubs.rd(self.cam)
-                frame_positions.append([x, y])
-                frame = Frame(channel.name, img, [x, y], channel.model, self.unit_physical_length())
-                self.fg.add(frame)
-
-                if secondary_channels is not None:
-                    if frame.count > 3:
-                        for ch in secondary_channels:
-                            print(f"moving to {ch}")
-                            yield from plan_stubs.mv(self.ch, ch.name)
-                            yield from plan_stubs.mv(self.cam.exposure, ch.exposure)
-
-                            yield from plan_stubs.trigger_and_read(detectors)
-                            yield from plan_stubs.wait()
-
-                            img = yield from plan_stubs.rd(self.cam)
-                            frame.add_secondary(img, ch)
-                            
-                        print(f"moving to {channel}")
-                        yield from plan_stubs.mv(self.ch, channel.name)
-                        yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
-                    
-                self.fg.notify(frame)
-
-                if self.fg.count >= num:
-                    break
-
-            yield from plan_stubs.close_run()
-
-        yield from inner_loop()
+    
 
 class FrameGroupVisualizer:
     def __init__(self):
@@ -257,61 +222,75 @@ class FrameGroupVisualizer:
         self.frame_n += 1
         self.fig.canvas.draw()
 
+def detect_from_frame(frame):
+    image = frame.image
+    model = frame.channel.model
+    label = segment(image, **model)
+    return self.label
+
+class Coords:
+    def __init__(self, xy):
+        self.xy = xy
+
+   
+class FrameGroupProcessor:
+    def __init__(self):
+        pass
+
+    def update(self, frame):
+        self.segment(frame)
+
+    def segment(self, frame):
+        img = frame.image
+        model = frame.channel.model
+        frame.label = segment(img, **model)
+
+    def anisotropy(self, frame):
+        ...
+
+class TimeGroup:
+    def __init__(self):
+        self.timesteps = []
+    
+    def add(self, group):
+        self.timesteps.append(group)
+        
+    def __getitem__(self, item):
+        return self.timesteps[item]
+
+    def __len__(self):
+        return len(self.timesteps)
 
 class FrameGroup:
     def __init__(self):
         self.frames = []
-        self.count = 0
         self._subscribers = []
-
+    
     def add(self, frame):
         self.frames.append(frame)
-        _, objs = frame.seg()
-        self.count += len(objs)
-
-    def subscribe(self, subscriber):
-        if subscriber not in self._subscribers:
-            self._subscribers.append(subscriber)
-
-    def notify(self, frame):
-        for subscriber in self._subscribers:
-            threading.Thread(target=subscriber.update, args=(frame,)).start()
-
+        self.notify()
+    
     def __getitem__(self, item):
         return self.frames[item]
 
+    def subscribe(self, processor):
+        if processor not in self._subscribers:
+            self._subscribers.append(processor)
+
+    def notify(self):
+        for _ in self._subscribers:
+            _.update(self.frames[-1])
+
+    def dump(self, t):
+        with open(f'filename_{t}.pickle', 'wb') as handle:
+            pickle.dump(self, handle)
+
 
 class Frame:
-    def __init__(self, channel, image, coords, model, pixel_size):
+    def __init__(self, channel, image, coords):
         self.channel = channel
         self.image = image
-        self.secondary_images = []
-        self._objects = []
         self.coords = coords
-        self.pixel_size = pixel_size
-        self.model = model
-        
-    def seg(self):
-        self.label = segment(self.image, **self.model)
-        self._objects = find_object_properties(self.label, self.image, self.coords, self.pixel_size)
-        self.count = len(self._objects)
-        return self.label, self._objects
-
-    def view(self):
-        v = napari.view_image(self.image)
-        for img in self.secondary_images:
-            v.view_image(img.image)
-        v.add_labels(self.label)
-
-    def add_label(self, label):
-        self.label = label
-        self._objects = find_object_properties(self.label, self.image, self.coords, self.pixel_size)
-
-    def add_secondary(self, image, ch):
-        f = Frame(channel=ch.name, image=image, coords=self.coords, model=ch.model, pixel_size=self.pixel_size)
-        f.add_label(self.label)
-        self.secondary_images.append(f)
-
 
 def inspect_plan(plan):
     msgs = list(plan)
@@ -319,14 +298,15 @@ def inspect_plan(plan):
         print(m)
 
 
+class Experiments:
+    # pcna time series for 24h - 100+ cells
+    # pcna time series with NCS low dose (0.1ug/ml)
+    #   * 6h
 
-# pcna time series for 24h - 100+ cells
-# pcna time series with NCS low dose (0.1ug/ml)
-#   * 6h
-
-# h2b- control cells - 2h /every 5minutes
-#   * 1ug/ml NCS
-#   * anisotropy imaging
+    # h2b- control cells - 2h /every 5minutes
+    #   * 1ug/ml NCS
+    #   * anisotropy imaging
 
 
-# cumulitivate histogram of intensity vs frequency
+    # cumulitivate histogram of intensity vs frequency
+    ...
