@@ -50,9 +50,19 @@ class ChannelConfig:
         return str(self.name)
 
 class BaseMicroscope:
-    def __init__(self, name=None, mmc=None):
-        self.name = name
+    """Basic abstraction of a microscope.
+    
+    Microscope requires a MMCore control object, which is passed on to ophyd
+    Device definitions, such as Camera, Focus, XYStage, etc. In this level of
+    abstraction, the devices of the microscope are (largely) operatered within
+    bluesky plans.
+
+    autofocus adapted from 
+    https://github.com/mdcurtis/micromanager-upstream/blob/master/scripts/AutoExpose.bsh
+    """
+    def __init__(self, mmc, name=None):
         self.mmc = mmc
+        self.name = name
         self.cam = Camera(self.mmc)
         self.z = Focus(self.mmc)
         self.ch = Channel(self.mmc)
@@ -60,6 +70,7 @@ class BaseMicroscope:
         self.stage = XYStage(self.mmc)
     
     def estimate_axial_length(self):
+        """estimate axial length of the detection field of view."""
         num_px = self.mmc.getImageWidth()
         
         obj_state = int(self.mmc.getProperty( "Objective", "State"))
@@ -76,6 +87,8 @@ class BaseMicroscope:
 
 
     def generate_grid(self, initial_x, initial_y, num):
+        """generate a grid around a point, with width proportional to
+        axial length"""
         width = self.estimate_axial_length()/2
         
         start_x = initial_x - (width*num) 
@@ -86,20 +99,15 @@ class BaseMicroscope:
 
         spec = Line("y", start_y, stop_y, num) * Line("x", start_x, stop_x, num)
         return spec
-
-class Microscope(BaseMicroscope):
-    def __init__(self, mmc):
-        super().__init__(mmc=mmc)
         self.detectors = [self.stage,
                      self.z, self.ch, self.cam.exposure, self.cam]
+
 
     def auto_focus(self):
         pass
 
     def auto_exposure(self):
-        # adapted from 
-        # https://github.com/mdcurtis/micromanager-upstream/blob/master/scripts/AutoExpose.bsh
-
+        """find the best exposure given current exposure"""
         max_possible = 4095
         max_exposure = 5000
         saturated = 0.95
@@ -128,9 +136,11 @@ class Microscope(BaseMicroscope):
         yield from plan_stubs.mv(self.cam.exposure, int(next_exposure))
         
         if (max_value/max_possible) > low_fraction:
-            yield from auto_exposure()
+            yield from auto_exp""osure()
         
     def snap_image_and_other_readings_too(self):
+        """trigger the camera and other devices associated with snapping
+        an image"""
         try:
             yield from plan_stubs.trigger_and_read(self.detectors)
             yield from plan_stubs.wait()
@@ -140,6 +150,7 @@ class Microscope(BaseMicroscope):
             yield from self.snap_image_and_other_readings_too()
 
     def set_channel(self, channel):
+        """set channels, as defined in MMConfigGroup"""
         yield from plan_stubs.mv(self.ch, channel.name)
         if channel.exposure == "auto":
             yield from self.auto_exposure()
@@ -148,6 +159,7 @@ class Microscope(BaseMicroscope):
 
 
     def scan_grid(self, channels, per_step_xy=None):
+        """Scan a grid and record the images"""
         # create a grid
         initial_x, initial_y = yield from plan_stubs.rd(self.stage)
         grid = self.generate_grid(initial_x=initial_x, initial_y=initial_y, num=2)
@@ -174,6 +186,13 @@ class Microscope(BaseMicroscope):
         yield from inner_loop()
         yield from plan_stubs.close_run()
 
+class Microscope(BaseMicroscope):
+    """A device to extract objects from images."""
+    def __init__(self, mmc):
+        super().__init__(mmc=mmc)
+
+    def anisotropy_objects(self):
+        pass
     
 
 def inspect_plan(plan):
