@@ -2,6 +2,10 @@
 
 from labels import Labeller
 from detection import AnisotropyFrameDetector
+from utils import pad_images_similar
+from compute import calculate_anisotropy
+from transform import register
+
 
 class Frame:
     """basic unit of data from the microscope"""
@@ -18,14 +22,15 @@ class Album:
     def add_frame(self, frame):
         self.frames.append(frame)
 
+
 class AlbumObjects:
-    def __init__(self, frames):
-        self.frames = frames
+    def __init__(self, album):
+        self.album = album
         self.objects = list()
 
-    def objects_from_frames(self):
-        for frame in self.frames:
-            self.objects.append(frame.label.result.regions)
+    def objects_from_album(self):
+        for frame in self.album:
+            self.objects.append(frame.label.result.objects)
 
 
 class AnisotropyFrame(Frame):
@@ -38,11 +43,16 @@ class AnisotropyFrame(Frame):
         self.get_objects()
 
     def get_objects(self):
-        self.label = Labeller(image, model)
-        self.label.generate_label()
+        self.label = Labeller(self.image, self.model)
 
+        self.parallel = self.label.result.objects[0].intensity_image
+        self.perpendicular = self.label.result.objects[1].intensity_image
 
-        self.parallel = self.label.result.regions[0]
-        self.perpendicular = self.label.result.regions[1]
+        self.parallel, self.perpendicular = pad_images_similar(self.parallel,
+                                                self.perpendicular)
+
+        self.perpendicular = register(self.parallel, self.perpendicular)
+
+        self.amap = calculate_anisotropy(self.parallel, self.perpendicular)
 
 
