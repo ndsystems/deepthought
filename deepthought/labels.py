@@ -8,7 +8,7 @@ class SegmentedImage:
     def __init__(self, image, label):
         self.image = image
         self.label = label
-        self.regions = self.get_regions()
+        self.objects = self.get_regions()
 
     def set_xy(self, stage_coords):
         # coordinate transformation from rc to cartesian
@@ -26,13 +26,14 @@ class SegmentedImage:
         # get individual label regions from image
         regions = measure.regionprops(self.label, intensity_image=self.image)
         return regions
+    
 
 
 class Labeller:
     def __init__(self, image, model):
         self.model = model
         self.image = image
-        self.label = self.generate_label(image)
+        self.label = self.generate_label(self.image)
         self.result = SegmentedImage(self.image, self.label)
 
     def generate_label(self, image):
