@@ -56,6 +56,8 @@ class BaseMicroscope:
         self.ch = Channel(self.mmc)
         self.af = AutoFocus(self.mmc)
         self.stage = XYStage(self.mmc)
+        self.detectors = [self.stage,
+                     self.z, self.ch, self.cam.exposure, self.cam]
     
     def estimate_axial_length(self):
         """estimate axial length of the detection field of view."""
@@ -87,8 +89,6 @@ class BaseMicroscope:
 
         spec = Line("y", start_y, stop_y, num) * Line("x", start_x, stop_x, num)
         return spec
-        self.detectors = [self.stage,
-                     self.z, self.ch, self.cam.exposure, self.cam]
 
 
     def auto_focus(self):
@@ -124,7 +124,7 @@ class BaseMicroscope:
         yield from plan_stubs.mv(self.cam.exposure, int(next_exposure))
         
         if (max_value/max_possible) > low_fraction:
-            yield from auto_exp""osure()
+            yield from auto_exposure()
         
     def snap_image_and_other_readings_too(self):
         """trigger the camera and other devices associated with snapping
@@ -179,7 +179,21 @@ class Microscope(BaseMicroscope):
     def __init__(self, mmc):
         super().__init__(mmc=mmc)
 
-    def anisotropy_objects(self):
+    def anisotropy_objects(self, channels, coords):
+        """experiment with anisotropy
+        
+        step 1 - image frames of interest
+        step 2 - extract parallel and perpendicular fields
+        step 3 - compute anisotropy
+        step 4 - segment objects
+
+        """
+        for points in coords:
+            yield from self.snap_image_and_other_readings_too()
+            img = yield from plan_stubs.rd(self.cam)
+            x, y = yield from plan_stubs.rd(self.stage)
+
+
         pass
     
 
