@@ -83,7 +83,7 @@ if __name__ == "__main__":
     
     m = Microscope(mmc=scopes["bright_star"])
     
-    plan = m.anisotropy_objects(channels=[fitc, bf])
+    plan = m.scan_an(channels=[fitc, bf])
 
     RE = configure_RE()
     RE.subscribe(napari_viewer)

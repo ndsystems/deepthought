@@ -1,11 +1,11 @@
 import numpy as np
-from bluesky import plan_stubs 
+from bluesky import plan_stubs, utils
 from devices import Camera, Focus, Channel, AutoFocus, XYStage
 from compute import axial_length
 import threading
 from optimization import shannon_dct
 from scanspec.specs import Line
-from frames import AnisotropyFrame
+from frames import AnisotropyFrame, Album
 
 
 
@@ -161,9 +161,9 @@ class Microscope(BaseMicroscope):
     """A device to extract objects from images."""
     def __init__(self, mmc):
         super().__init__(mmc=mmc)
+        self.album = Album()
 
-
-    def anisotropy_objects(self, channels, coords):
+    def anisotropy_objects(self):
         """experiment with anisotropy
         
         step 1 - image frames of interest
@@ -172,14 +172,20 @@ class Microscope(BaseMicroscope):
         step 4 - segment objects
 
         """
-        for points in coords:
-            yield from self.snap_image_and_other_readings_too()
-            img = yield from plan_stubs.rd(self.cam)
-            x, y = yield from plan_stubs.rd(self.stage)
-            frame = AnisotropyFrame(img, coords=[x, y])
 
-        pass
-    
+        yield from self.snap_image_and_other_readings_too()
+
+        img = yield from plan_stubs.rd(self.cam)
+        x, y = yield from plan_stubs.rd(self.stage)
+        frame = AnisotropyFrame(img, coords=[x, y])
+        self.album.add_frame(frame)
+
+    def scan_an(self, channels):
+        yield from plan_stubs.open_run()
+        for ch in channels:
+            yield from self.set_channel(ch)
+            yield from self.anisotropy_objects()
+        yield from plan_stubs.close_run()
 
 def inspect_plan(plan):
     msgs = list(plan)
