@@ -1,10 +1,34 @@
-from microscope import Microscope, ChannelConfig, RE
+from microscope import Microscope
 # make a grid for scan
 import napari
 import numpy as np
-import matplotlib.pyplot as plt
 from devices import MMCoreInterface
-from optimization import shannon_dct
+from bluesky.callbacks.best_effort import BestEffortCallback
+from bluesky import RunEngine
+from data import db
+
+def configure_RE():
+    bec = BestEffortCallback()
+    bec.disable_plots()
+
+    RE = RunEngine({})
+    RE.subscribe(bec)
+    RE.subscribe(db.insert)
+    return RE
+
+
+class ChannelConfig:
+    def __init__(self, name="BF"):
+        self.name = name
+        self.exposure = None
+        self.model = None
+
+        if self.exposure is None:
+            self.exposure = "auto"
+
+    def __repr__(self):
+        return str(self.name)
+
 
 tritc = ChannelConfig("TRITC")
 tritc.exposure = 500
@@ -52,30 +76,15 @@ def napari_viewer(event, document):
                 pass
 
 
-def per_step_xy(image):
-    img  = image
-
 if __name__ == "__main__":
-    """    # experiment with anisotropy
-    
-    # step 1 - map the sample with eva green
-    # step 2 - identify coordinates to image
-    # step 3 - align map_eg to map_bs
-    # step 4 - timelapse objects of interest
-    # 
-    """    
-    
     scopes = MMCoreInterface()
     scopes.add("10.10.1.35", "bright_star")
     scopes.add("10.10.1.57", "eva_green")
     
     m = Microscope(mmc=scopes["bright_star"])
-    # m.mmc.setXYPosition(0, 0)
     
-    plan = m.scan_grid(channels=[fitc, bf], per_step_xy=per_step_xy)
+    plan = m.anisotropy_objects(channels=[fitc, bf])
 
+    RE = configure_RE()
     RE.subscribe(napari_viewer)
-
     uid, = RE(plan)
-
-    # # snap_image(m.mmc)

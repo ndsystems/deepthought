@@ -1,19 +1,13 @@
 import numpy as np
-from bluesky.callbacks.best_effort import BestEffortCallback
-from bluesky import RunEngine, plans, plan_stubs, plan_patterns, utils
+from bluesky import plan_stubs 
 from devices import Camera, Focus, Channel, AutoFocus, XYStage
 from compute import axial_length
-from data import db
 import threading
 from optimization import shannon_dct
 from scanspec.specs import Line
+from frames import AnisotropyFrame
 
-bec = BestEffortCallback()
-bec.disable_plots()
 
-RE = RunEngine({})
-RE.subscribe(bec)
-RE.subscribe(db.insert)
 
 
 class Disk:
@@ -24,18 +18,6 @@ class Disk:
         # parameter for num of axial widths
         self.num = num
 
-
-class ChannelConfig:
-    def __init__(self, name="BF"):
-        self.name = name
-        self.exposure = None
-        self.model = None
-
-        if self.exposure is None:
-            self.exposure = "auto"
-
-    def __repr__(self):
-        return str(self.name)
 
 class BaseMicroscope:
     """Basic abstraction of a microscope.
@@ -174,10 +156,12 @@ class BaseMicroscope:
         yield from inner_loop()
         yield from plan_stubs.close_run()
 
+
 class Microscope(BaseMicroscope):
     """A device to extract objects from images."""
     def __init__(self, mmc):
         super().__init__(mmc=mmc)
+
 
     def anisotropy_objects(self, channels, coords):
         """experiment with anisotropy
@@ -192,7 +176,7 @@ class Microscope(BaseMicroscope):
             yield from self.snap_image_and_other_readings_too()
             img = yield from plan_stubs.rd(self.cam)
             x, y = yield from plan_stubs.rd(self.stage)
-
+            frame = AnisotropyFrame(img, coords=[x, y])
 
         pass
     
