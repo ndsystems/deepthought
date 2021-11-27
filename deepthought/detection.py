@@ -1,9 +1,14 @@
 from cellpose import models
+import numpy as np
 
-class NuclearDetector:
+class Detector:
+    def __init__(self, name, type_):
+        self.name = name
+        self.type_ = type_
+
+class NuclearDetector(Detector):
     def __init__(self):
-        self.name = "cellpose"
-        self.type = "nuclei"
+        super().__init__(name="cellpose", type_="nuclei")
         self.gpu = 1
         self.diameter = 100 # use unit conversion here
         self.create_model()
@@ -19,10 +24,9 @@ class NuclearDetector:
         label = list_of_labels[0]
         return label
 
-class AnisotropyFrameDetector:
+class AnisotropyFrameDetector(Detector):
     def __init__(self):
-        self.name = "anisotropy"
-        self.type = "frame"
+        super().__init__(name="anisotropy", type_="frame")
     
     def detect(self, image):
         x, y = image.shape
@@ -32,7 +36,7 @@ class AnisotropyFrameDetector:
 
         label = np.zeros_like(image)
 
-        label[:, :midpoint] = 2
-        label[:, midpoint - diff:] = 1
+        label[ :midpoint, :] = 1
+        label[midpoint - diff:, :] = 2
 
         return label
