@@ -5,6 +5,7 @@ from detection import AnisotropyFrameDetector
 from utils import pad_images_similar
 from compute import calculate_anisotropy
 from transform import register
+import napari
 
 
 class Frame:
@@ -55,4 +56,7 @@ class AnisotropyFrame(Frame):
 
         self.amap = calculate_anisotropy(self.parallel, self.perpendicular)
 
-
+    def view(self):
+        v = napari.Viewer()
+        layer = v.add_image(self.parallel)
+        v.add_image(self.amap, colormap="jet")
