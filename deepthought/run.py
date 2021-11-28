@@ -1,11 +1,11 @@
 from microscope import Microscope
-# make a grid for scan
 import napari
 import numpy as np
 from devices import MMCoreInterface
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky import RunEngine
 from data import db
+from optimization import shannon_dct
 
 def configure_RE():
     bec = BestEffortCallback()
@@ -46,7 +46,7 @@ dapi.model = {"kind": "nuclei",
                 "diameter": 100}
 
 fitc = ChannelConfig("FITC")
-fitc.exposure = 1000
+fitc.exposure = 500
 fitc.model = {"kind": "nuclei",
                 "diameter": 100}
 
@@ -61,20 +61,18 @@ def snap_image(mmc):
     mmc.snapImage()
     img = mmc.getImage()
     img = np.array(img)
+    print(shannon_dct(img))
     napari.view_image(img)
 
 v = napari.Viewer()
 layer = v.add_image(np.random.randint(0, 4095, (2048, 2048)))
-
+imgs = []
 def napari_viewer(event, document):
     if event == "event":
         if "image" in document["data"]:
             img = document["data"]["image"]
-            try:
-                layer.data = img
-            except:
-                pass
-
+            imgs.append(img)
+            layer.data = np.concatenate((layer.data, img), axis=0)
 
 if __name__ == "__main__":
     scopes = MMCoreInterface()
@@ -83,8 +81,8 @@ if __name__ == "__main__":
     
     m = Microscope(mmc=scopes["bright_star"])
     
-    plan = m.scan_an(channels=[fitc, bf])
+    plan = m.scan_an_t(channels=[fitc])
 
-    RE = configure_RE()
-    RE.subscribe(napari_viewer)
-    uid, = RE(plan)
+    # RE = configure_RE()
+    # RE.subscribe(napari_viewer)
+    # _ = RE(plan)

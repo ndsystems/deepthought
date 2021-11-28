@@ -74,6 +74,10 @@ class BaseMicroscope:
 
 
     def auto_focus(self):
+        initial_z = yield from plan_stubs.rd(self.z)
+
+
+
         pass
 
     def auto_exposure(self):
@@ -108,15 +112,17 @@ class BaseMicroscope:
         if (max_value/max_possible) > low_fraction:
             yield from auto_exposure()
         
-    def snap_image_and_other_readings_too(self):
+    def snap_image_and_other_readings_too(self, channel=None):
         """trigger the camera and other devices associated with snapping
         an image"""
+        if channel is not None:
+            yield from self.set_channel(channel)
         try:
             yield from plan_stubs.trigger_and_read(self.detectors)
             yield from plan_stubs.wait()
         except utils.FailedStatus:
             print("RECOVERING FROM FAILURE")
-            yield from plan.plan_stubs.sleep(5)
+            yield from plan_stubs.sleep(5)
             yield from self.snap_image_and_other_readings_too()
 
     def set_channel(self, channel):
@@ -128,42 +134,13 @@ class BaseMicroscope:
             yield from plan_stubs.mv(self.cam.exposure, channel.exposure)
 
 
-    def scan_grid(self, channels, per_step_xy=None):
-        """Scan a grid and record the images"""
-        # create a grid
-        initial_x, initial_y = yield from plan_stubs.rd(self.stage)
-        grid = self.generate_grid(initial_x=initial_x, initial_y=initial_y, num=2)
-
-        def inner_loop():
-            # iterate thru the scanspec object for grid
-            for point in grid.midpoints():
-                # scanspec to device definition adapter
-                coords = [float(point["x"]), float(point["y"])]
-                yield from plan_stubs.mv(self.stage, coords)
-                for channel in channels:
-                    yield from self.set_channel(channel)
-                    yield from self.snap_image_and_other_readings_too()
-                    img = yield from plan_stubs.rd(self.cam)
-                    x, y = yield from plan_stubs.rd(self.stage)
-                    if per_step_xy is not None:
-                        try:
-                            per_step_xy(img)
-                        except:
-                            print('error running func on image')
-                            pass
-
-        yield from plan_stubs.open_run()
-        yield from inner_loop()
-        yield from plan_stubs.close_run()
-
-
 class Microscope(BaseMicroscope):
     """A device to extract objects from images."""
     def __init__(self, mmc):
         super().__init__(mmc=mmc)
         self.album = Album()
 
-    def anisotropy_objects(self):
+    def anisotropy_objects(self, channel):
         """experiment with anisotropy
         
         step 1 - image frames of interest
@@ -173,7 +150,7 @@ class Microscope(BaseMicroscope):
 
         """
 
-        yield from self.snap_image_and_other_readings_too()
+        yield from self.snap_image_and_other_readings_too(channel)
 
         img = yield from plan_stubs.rd(self.cam)
         x, y = yield from plan_stubs.rd(self.stage)
@@ -183,9 +160,23 @@ class Microscope(BaseMicroscope):
     def scan_an(self, channels):
         yield from plan_stubs.open_run()
         for ch in channels:
-            yield from self.set_channel(ch)
-            yield from self.anisotropy_objects()
+            yield from self.anisotropy_objects(ch)
         yield from plan_stubs.close_run()
+
+    def scan_an_t(self, channels, cycles=3, delta_t=3):
+        for _ in range(cycles):
+            yield from self.scan_an(channels)
+            yield from plan_stubs.sleep(delta_t)
+
+    def scan_an_xy(self, channels, range=4):
+        initial_coords = yield from plan_stubs.rd(self.stage)
+
+        grid = self.generate_grid(*initial_coords, num=range)
+        
+        for point in grid.midpoints():
+            coords = [float(point["x"]), float(point["y"])]
+            yield from plan_stubs.mv(self.stage, coords)
+            yield from self.scan_an(channels)
 
 def inspect_plan(plan):
     msgs = list(plan)
