@@ -115,9 +115,9 @@ class BaseMicroscope:
     def snap_image_and_other_readings_too(self, channel=None):
         """trigger the camera and other devices associated with snapping
         an image"""
-        if channel is not None:
-            yield from self.set_channel(channel)
         try:
+            if channel is not None:
+                yield from self.set_channel(channel)
             yield from plan_stubs.trigger_and_read(self.detectors)
             yield from plan_stubs.wait()
         except utils.FailedStatus:
