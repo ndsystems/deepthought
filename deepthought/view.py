@@ -31,9 +31,9 @@ class AlbumViewer:
         imgs = np.stack(data["image"].to_numpy())
         amaps = np.stack(data["anisotropy"].to_numpy())
 
-        dims = self.album.data.keys()
-        imgs = imgs.reshape(-1, len(dims), *imgs.shape[-2:])
-        amaps = amaps.reshape(-1, len(dims), *imgs.shape[-2:])
+        dims = len(self.album.data.keys())
+        imgs = imgs.reshape(dims, -1, *imgs.shape[-2:])
+        amaps = amaps.reshape(dims, -1, *imgs.shape[-2:])
 
         v = napari.Viewer()
         v.add_image(imgs, name="image")
