@@ -31,12 +31,12 @@ class Album:
         self.data = OrderedDict()
 
     def get_data(self):
-        keys = self.album.data.keys()
+        keys = self.data.keys()
 
         time_data = []
 
         for key in keys:
-            data = self.frame_set_to_df(self.album.data[key])
+            data = self.frame_set_to_df(self.data[key])
             time_data.append(data)
 
         return pd.concat(time_data)

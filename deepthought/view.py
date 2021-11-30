@@ -7,26 +7,8 @@ class AlbumViewer:
     def __init__(self, album):
         self.album = album
 
-    def get_data(self):
-        dims = self.album.data.keys()
-
-        time_data = []
-
-        for dim in dims:
-            data = self.frame_set_to_df(self.album.data[dim])
-            time_data.append(data)
-
-        return pd.concat(time_data)
-
-    def frame_set_to_df(self, frame_set):
-        list_of_frame_data = []
-        for frame in frame_set:
-            list_of_frame_data.append(frame.read())
-
-        return pd.DataFrame(list_of_frame_data)
-
     def view(self):
-        data = self.get_data()
+        data = self.album.get_data()
 
         imgs = np.stack(data["image"].to_numpy())
         amaps = np.stack(data["anisotropy"].to_numpy())
