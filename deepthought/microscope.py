@@ -8,8 +8,6 @@ from scanspec.specs import Line
 from frames import AnisotropyFrame, Album
 
 
-
-
 class Disk:
     def __init__(self, center, num):
         self.center = center
@@ -21,7 +19,7 @@ class Disk:
 
 class BaseMicroscope:
     """Basic abstraction of a microscope.
-    
+
     Microscope requires a MMCore control object, which is passed on to ophyd
     Device definitions, such as Camera, Focus, XYStage, etc. In this level of
     abstraction, the devices of the microscope are (largely) operatered within
@@ -30,6 +28,7 @@ class BaseMicroscope:
     autofocus adapted from 
     https://github.com/mdcurtis/micromanager-upstream/blob/master/scripts/AutoExpose.bsh
     """
+
     def __init__(self, mmc, name=None):
         self.mmc = mmc
         self.name = name
@@ -39,13 +38,13 @@ class BaseMicroscope:
         self.af = AutoFocus(self.mmc)
         self.stage = XYStage(self.mmc)
         self.detectors = [self.stage,
-                     self.z, self.ch, self.cam.exposure, self.cam]
-    
+                          self.z, self.ch, self.cam.exposure, self.cam]
+
     def estimate_axial_length(self):
         """estimate axial length of the detection field of view."""
         num_px = self.mmc.getImageWidth()
-        
-        obj_state = int(self.mmc.getProperty( "Objective", "State"))
+
+        obj_state = int(self.mmc.getProperty("Objective", "State"))
         if obj_state == 4:
             mag = 100
         elif obj_state == 3:
@@ -57,26 +56,31 @@ class BaseMicroscope:
 
         return ax_len
 
-
-    def generate_grid(self, initial_x, initial_y, num):
+    def generate_grid(self, initial_x, initial_y, num, pos="middle"):
         """generate a grid around a point, with width proportional to
         axial length"""
         width = self.estimate_axial_length()/2
-        
-        start_x = initial_x - (width*num) 
-        stop_x = (width*(num+1)) + initial_x
-        
-        start_y = initial_y - (width*num)
-        stop_y = (width*(num+1)) + initial_y
 
-        spec = Line("y", start_y, stop_y, num) * Line("x", start_x, stop_x, num)
+        if pos == "middle":
+            start_x = initial_x - (width*num)
+            stop_x = (width*(num+1)) + initial_x
+
+            start_y = initial_y - (width*num)
+            stop_y = (width*(num+1)) + initial_y
+
+        if pos == "left":
+            start_x = initial_x
+            stop_x = (width*(num+1)) + start_x
+
+            start_y = initial_y
+            stop_y = (width*(num+1)) + start_y
+
+        spec = Line("y", start_y, stop_y, num) * \
+            Line("x", start_x, stop_x, num)
         return spec
-
 
     def auto_focus(self):
         initial_z = yield from plan_stubs.rd(self.z)
-
-
 
         pass
 
@@ -93,25 +97,25 @@ class BaseMicroscope:
         yield from self.snap_image_and_other_readings_too()
         img = yield from plan_stubs.rd(self.cam)
         exposure = yield from plan_stubs.rd(self.cam.exposure)
-        
+
         max_value = img.max()
-        
+
         if max_value > (max_possible * saturated):
             next_exposure = (1/too_bright) * exposure
             print(f"too bright! next_exposure: {next_exposure}")
             yield from plan_stubs.mv(self.cam.exposure, next_exposure)
-            yield from auto_exposure()
-        
+            yield from self.auto_exposure()
+
         next_exposure = aim * max_possible / max_value * exposure
-        
+
         if next_exposure > max_exposure:
             return
-        
+
         yield from plan_stubs.mv(self.cam.exposure, int(next_exposure))
-        
+
         if (max_value/max_possible) > low_fraction:
-            yield from auto_exposure()
-        
+            yield from self.auto_exposure()
+
     def snap_image_and_other_readings_too(self, channel=None):
         """trigger the camera and other devices associated with snapping
         an image"""
@@ -136,13 +140,14 @@ class BaseMicroscope:
 
 class Microscope(BaseMicroscope):
     """A device to extract objects from images."""
+
     def __init__(self, mmc):
         super().__init__(mmc=mmc)
         self.album = Album()
 
     def anisotropy_objects(self, channel):
         """experiment with anisotropy
-        
+
         step 1 - image frames of interest
         step 2 - extract parallel and perpendicular fields
         step 3 - compute anisotropy
@@ -168,19 +173,42 @@ class Microscope(BaseMicroscope):
             yield from self.scan_an(channels)
             yield from plan_stubs.sleep(delta_t)
 
-    def scan_an_xy(self, channels, range=4):
-        initial_coords = yield from plan_stubs.rd(self.stage)
+    def scan_an_xy(self, channels, grid=None, range=2):
+        if grid is None:
+            initial_coords = yield from plan_stubs.rd(self.stage)
+            grid = self.generate_grid(*initial_coords, num=range)
 
-        grid = self.generate_grid(*initial_coords, num=range)
-        
         for point in grid.midpoints():
             coords = [float(point["x"]), float(point["y"])]
             yield from plan_stubs.mv(self.stage, coords)
             yield from self.scan_an(channels)
 
+    def scan_an_xy_t(self, channels, range=2, cycles=1, delta_t=1):
+        """Scan a grid over time and compute anisotropy image.
+        """
+        self.current_t = 0
+
+        initial_coords = yield from plan_stubs.rd(self.stage)
+
+        grid = self.generate_grid(*initial_coords, pos="left", num=range)
+
+        def inner_loop():
+            self.album.set_current_group(self.current_t)
+            yield from self.scan_an_xy(channels, grid=grid, range=range)
+            yield from plan_stubs.sleep(delta_t)
+            self.current_t += 1
+
+        # time recursion
+        if self.current_t >= cycles:
+            return
+
+        else:
+            yield from inner_loop()
+
+        yield from inner_loop()
+
+
 def inspect_plan(plan):
     msgs = list(plan)
     for m in msgs:
         print(m)
-
-
