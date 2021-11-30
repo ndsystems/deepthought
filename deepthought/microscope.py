@@ -173,39 +173,39 @@ class Microscope(BaseMicroscope):
             yield from self.scan_an(channels)
             yield from plan_stubs.sleep(delta_t)
 
-    def scan_an_xy(self, channels, grid=None, range=2):
+    def scan_an_xy(self, channels, grid=None, num=2):
         if grid is None:
             initial_coords = yield from plan_stubs.rd(self.stage)
-            grid = self.generate_grid(*initial_coords, num=range)
+            grid = self.generate_grid(*initial_coords, num=num)
 
         for point in grid.midpoints():
             coords = [float(point["x"]), float(point["y"])]
             yield from plan_stubs.mv(self.stage, coords)
             yield from self.scan_an(channels)
 
-    def scan_an_xy_t(self, channels, range=2, cycles=1, delta_t=1):
+    def scan_an_xy_t(self, channels, num=2, cycles=1, delta_t=1):
         """Scan a grid over time and compute anisotropy image.
         """
         self.current_t = 0
 
         initial_coords = yield from plan_stubs.rd(self.stage)
 
-        grid = self.generate_grid(*initial_coords, pos="left", num=range)
+        grid = self.generate_grid(*initial_coords, pos="left", num=num)
 
         def inner_loop():
             self.album.set_current_group(self.current_t)
-            yield from self.scan_an_xy(channels, grid=grid, range=range)
+            yield from self.scan_an_xy(channels, grid=grid, num=num)
             yield from plan_stubs.sleep(delta_t)
             self.current_t += 1
 
         # time recursion
-        if self.current_t >= cycles:
-            return
+        while True:
+            if self.current_t >= cycles:
+                yield from inner_loop()
+                break
 
-        else:
-            yield from inner_loop()
-
-        yield from inner_loop()
+            else:
+                yield from inner_loop()
 
 
 def inspect_plan(plan):
