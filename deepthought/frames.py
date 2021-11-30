@@ -8,10 +8,12 @@ from transform import register
 import napari
 from collections import OrderedDict
 from view import AlbumViewer
+import pandas as pd
 
 
 class Frame:
     """basic unit of data from the microscope"""
+
     def __init__(self, image, coords, model):
         self.image = image
         self.coords = coords
@@ -21,15 +23,53 @@ class Frame:
 
 class Album:
     def __init__(self):
-        self.frames = list()
+        self.current_group = "frames"
+        # data[0] = []
+        # data[1] = []
+        # data[2] = []
+        #
+        self.data = OrderedDict()
 
-    def add_frame(self, frame):
-        self.frames.append(frame)
+    def get_data(self):
+        keys = self.album.data.keys()
+
+        time_data = []
+
+        for key in keys:
+            data = self.frame_set_to_df(self.album.data[key])
+            time_data.append(data)
+
+        return pd.concat(time_data)
+
+    def frame_set_to_df(self, frame_set):
+        list_of_frame_data = []
+        for frame in frame_set:
+            list_of_frame_data.append(frame.read())
+
+        return pd.DataFrame(list_of_frame_data)
+
+    def add_frame(self, frame, group_name=None):
+        if group_name is None:
+            group_name = self.current_group
+
+        if group_name not in self.data:
+            self.initiate_group(group_name)
+
+        self._add_frame(frame, group_name)
+
+    def _add_frame(self, frame, group_name):
+        self.data[group_name].append(frame)
+
+    def initiate_group(self, name):
+        self.data[name] = []
+
+    def set_current_group(self, name):
+        self.current_group = name
 
     def view(self):
         viewer = AlbumViewer(self)
         viewer.view()
-        
+
 
 class AlbumObjects:
     def __init__(self, album):
@@ -41,11 +81,9 @@ class AlbumObjects:
             self.objects.append(frame.label.result.objects)
 
 
-
-
-
 class AnisotropyFrame(Frame):
     """basic unit of anisotropy imaging frame"""
+
     def __init__(self, image, coords, model=None):
         if model is None:
             model = AnisotropyFrameDetector()
@@ -60,7 +98,7 @@ class AnisotropyFrame(Frame):
         self.perpendicular = self.label.result.objects[1].intensity_image
 
         self.parallel, self.perpendicular = pad_images_similar(self.parallel,
-                                                self.perpendicular)
+                                                               self.perpendicular)
 
         self.perpendicular = register(self.parallel, self.perpendicular)
 
