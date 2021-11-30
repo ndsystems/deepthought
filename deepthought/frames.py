@@ -6,6 +6,8 @@ from utils import pad_images_similar
 from compute import calculate_anisotropy
 from transform import register
 import napari
+from collections import OrderedDict
+from view import AlbumViewer
 
 
 class Frame:
@@ -14,6 +16,7 @@ class Frame:
         self.image = image
         self.coords = coords
         self.model = model
+        self.t = 0
 
 
 class Album:
@@ -23,6 +26,10 @@ class Album:
     def add_frame(self, frame):
         self.frames.append(frame)
 
+    def view(self):
+        viewer = AlbumViewer(self)
+        viewer.view()
+        
 
 class AlbumObjects:
     def __init__(self, album):
@@ -32,6 +39,9 @@ class AlbumObjects:
     def objects_from_album(self):
         for frame in self.album:
             self.objects.append(frame.label.result.objects)
+
+
+
 
 
 class AnisotropyFrame(Frame):
@@ -59,4 +69,15 @@ class AnisotropyFrame(Frame):
     def view(self):
         v = napari.Viewer()
         layer = v.add_image(self.parallel)
-        v.add_image(self.amap, colormap="jet")
+        v.add_image(self.amap, colormap="jet", contrast_limits=[0.01, 0.28])
+
+    def read(self):
+        values = [self.parallel, self.amap]
+        keys = ["image", "anisotropy"]
+
+        data = OrderedDict()
+
+        for key, value in zip(keys, values):
+            data[key] = value
+
+        return data
