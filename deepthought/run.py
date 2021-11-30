@@ -64,8 +64,8 @@ def snap_image(mmc):
     print(shannon_dct(img))
     napari.view_image(img)
 
-v = napari.Viewer()
-layer = v.add_image(np.random.randint(0, 4095, (2048, 2048)))
+# v = napari.Viewer()
+# layer = v.add_image(np.random.randint(0, 4095, (2048, 2048)))
 imgs = []
 def napari_viewer(event, document):
     if event == "event":
@@ -81,8 +81,8 @@ if __name__ == "__main__":
     
     m = Microscope(mmc=scopes["bright_star"])
     
-    plan = m.scan_an_t(channels=[fitc])
+    plan = m.scan_an_t(channels=[fitc], cycles=2, delta_t=1)
 
-    # RE = configure_RE()
+    RE = configure_RE()
     # RE.subscribe(napari_viewer)
-    # _ = RE(plan)
+    _ = RE(plan)
