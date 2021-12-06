@@ -1,24 +1,111 @@
 # model describing unit data from the microscope
 
-from labels import Labeller
-from detection import AnisotropyFrameDetector
+from labels import Labeller, LabelledImage
+from detection import AnisotropyFrameDetector, NuclearDetector
 from utils import pad_images_similar
 from compute import calculate_anisotropy
 from transform import register
-import napari
+import numpy as np
 from collections import OrderedDict
 from view import AlbumViewer
+from coords import rc_to_cart
 import pandas as pd
 
+
+class Object:
+    def __init__(self):
+        self.vector = OrderedDict()
+        self.raster = OrderedDict()
+
+
+class Objects:
+    def __init__(self, channel, regions):
+        self.channel = channel
+        self.regions = regions
+        self.objects = []
+
+        for region in self.regions:
+            ob = self.region_to_object(region)
+            self.objects.append(ob)
+
+    def region_to_object(self, region):
+        ob = Object()
+        ob.raster[self.channel.marker] = region.intensity_image
+        ob.vector["coords"] = region.xy
+        return ob
+
+    def merge_secondary(self, objs):
+        for primary, secondary in zip(self.objects, objs.objects):
+            primary.raster.update(secondary.raster)
 
 class Frame:
     """basic unit of data from the microscope"""
 
-    def __init__(self, image, coords, model):
+    def __init__(self, image, coords, channel, pixel_size):
         self.image = image
         self.coords = coords
-        self.model = model
-        self.t = 0
+        self.channel = channel
+        self.pixel_size = pixel_size
+
+    def clean_up(self):
+        del self.image
+
+    def get_label(self):
+        image = self.image
+        detector = self.channel.detector
+        frame_label = Labeller(image, detector).make()
+        return frame_label        
+
+    def get_objects(self, frame_label):
+        regions = LabelledImage(self.image, frame_label).get_regions()
+        regions = self.correct_frame_object_xy(regions, self.image)
+        objects = Objects(channel=self.channel, regions=regions)
+        return objects
+
+    def correct_frame_object_xy(self, regions, image):
+        # coordinate transformation from rc to cartesian
+        for reg in regions:
+            rc_coords = np.array([reg.centroid])
+            coords, _ = rc_to_cart(rc_coords, image=image)
+            x, y = coords[0]
+            x = x * self.pixel_size
+            y = y * self.pixel_size
+            x_microns = np.around(x + self.coords[0])
+            y_microns = np.around(y + self.coords[1])
+            reg.xy = [x_microns, y_microns]
+
+        return regions
+
+
+class FrameCollection:
+    """collection of frames, that are to be processed together and has a primary label identifying
+    objects of common interest.
+
+    An example of a primary label is DAPI image for nuclei identification"""
+
+    def __init__(self, channels):
+        self.channels = channels
+        self.collection = []
+
+
+    def add_frame(self, frame):
+        self.collection.append(frame)
+
+
+class SingleLabelFrames(FrameCollection):
+    def __init__(self, channels):
+        super().__init__(channels)
+
+    def get_objects(self):
+        self.primary_label = self.collection[0].get_label()
+        primary_objs = self.collection[0].get_objects(self.primary_label)
+
+        for frame in self.collection[1:]:
+            objs = frame.get_objects(frame_label=self.primary_label)
+            primary_objs.merge_secondary(objs)
+
+        self.objects = primary_objs
+        return self.objects
 
 
 class Album:
@@ -71,15 +158,17 @@ class Album:
         viewer.view()
 
 
-class AlbumObjects:
-    def __init__(self, album):
-        self.album = album
-        self.objects = list()
+class ObjectsAlbum:
+    def __init__(self):
+        self.objects_group = OrderedDict()
 
-    def objects_from_album(self):
-        for frame in self.album:
-            self.objects.append(frame.label.result.objects)
+    def add_objects(self, uid, objects):
+        self.objects_group[uid] = objects
 
+    
+    def __getitem__(self, value):
+        return list(self.objects_group.items())[value][1]
+    
 
 class AnisotropyFrame(Frame):
     """basic unit of anisotropy imaging frame"""
@@ -92,6 +181,7 @@ class AnisotropyFrame(Frame):
         self.get_objects()
 
     def get_objects(self):
+        # This currently does not currently get_objects
         self.label = Labeller(self.image, self.model)
 
         self.parallel = self.label.result.objects[0].intensity_image
@@ -119,3 +209,8 @@ class AnisotropyFrame(Frame):
             data[key] = value
 
         return data
+
+
+class CellularFrame(Frame):
+    def __init__(self, image, coords, channel):
+        super().__init__(image, coords, channel)
