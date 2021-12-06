@@ -11,6 +11,7 @@ from view import view
 from coords import rc_to_cart
 import pandas as pd
 from data import db
+from process import clear_border
 
 
 class Object:
@@ -55,7 +56,8 @@ class Frame:
         image = self.image
         detector = self.channel.detector
         frame_label = Labeller(image, detector).make()
-        return frame_label        
+        cleared = clear_border(frame_label)
+        return cleared
 
     def get_objects(self, frame_label):
         regions = LabelledImage(self.image, frame_label).get_regions()
@@ -87,7 +89,6 @@ class FrameCollection:
     def __init__(self, channels):
         self.channels = channels
         self.collection = []
-
 
     def add_frame(self, frame):
         self.collection.append(frame)
