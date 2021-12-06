@@ -24,13 +24,14 @@ class ObjectsCollection:
     def __init__(self, channel, regions):
         self.channel = channel
         self.regions = regions
-        self.objects = []
+        self.detected_objects = []
 
         for region in self.regions:
             ob = self.region_to_object(region)
-            self.objects.append(ob)
+            self.detected_objects.append(ob)
 
         del self.regions
+
 
     def region_to_object(self, region):
         ob = DetectedObject()
@@ -39,7 +40,7 @@ class ObjectsCollection:
         return ob
 
     def merge_secondary(self, objs):
-        for primary, secondary in zip(self.objects, objs.objects):
+        for primary, secondary in zip(self.detected_objects, objs.detected_objects):
             primary.raster.update(secondary.raster)
 
 class Frame:
@@ -113,13 +114,15 @@ class SingleLabelFrames(FrameCollection):
 
 class ObjectsAlbum:
     def __init__(self):
-        self.objects_group = OrderedDict()
+        self.objects_collection_group = OrderedDict()
+        self.count = 0
 
-    def add_objects(self, uid, objects):
-        self.objects_group[uid] = objects
+    def add_object_collection(self, uid, objects_collection):
+        self.objects_collection_group[uid] = objects_collection
+        self.count += len(objects_collection.detected_objects)
     
     def __getitem__(self, value):
-        return list(self.objects_group.items())[value][1]
+        return list(self.objects_collection_group.items())[value][1]
 
   
     def get_data_from_uid(self, uid):
@@ -128,15 +131,15 @@ class ObjectsAlbum:
         return data
 
     def view_raw(self, value):
-        uid = list(self.objects_group.items())[value][0]
+        uid = list(self.objects_collection_group.items())[value][0]
         img = self.get_data_from_uid(uid)
         view(img)
 
     def get_coords(self):
         coords = []
 
-        for uid, objects in self.objects_group.items():
-            coords.extend([ob.vector["coords"] for ob in objects.objects])
+        for uid, objects_collection in self.objects_group.items():
+            coords.extend([detected_obj.vector["coords"] for detected_obj in objects_collection.detected_objects])
         
         return coords
 

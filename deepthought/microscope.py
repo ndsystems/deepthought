@@ -226,11 +226,13 @@ class Microscope(BaseMicroscope):
             frame = Frame(img, coords=[x, y], channel=ch, pixel_size=pixel_size)
             frame_collection.add_frame(frame)
 
-        objects = frame_collection.get_objects()
+        detected_objects = frame_collection.get_objects()
+        self.album.add_object_collection(uid, detected_objects)
+        
         label = frame_collection.primary_label
         yield from plan_stubs.mv(s, label)
         yield from plan_stubs.trigger_and_read([s], name="label")
-        self.album.add_objects(uid, objects)
+        
         yield from plan_stubs.close_run()
 
     def scan_xy(self, channels, grid=None, num=8, initial_coords=None):
