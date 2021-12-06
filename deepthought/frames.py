@@ -20,7 +20,7 @@ class DetectedObject:
         self.raster = OrderedDict()
 
 
-class Objects:
+class ObjectsCollection:
     def __init__(self, channel, regions):
         self.channel = channel
         self.regions = regions
@@ -29,6 +29,8 @@ class Objects:
         for region in self.regions:
             ob = self.region_to_object(region)
             self.objects.append(ob)
+
+        del self.regions
 
     def region_to_object(self, region):
         ob = DetectedObject()
@@ -62,7 +64,7 @@ class Frame:
     def get_objects(self, frame_label):
         regions = LabelledImage(self.image, frame_label).get_regions()
         regions = self.correct_frame_object_xy(regions, self.image)
-        objects = Objects(channel=self.channel, regions=regions)
+        objects = ObjectsCollection(channel=self.channel, regions=regions)
         return objects
 
     def correct_frame_object_xy(self, regions, image):

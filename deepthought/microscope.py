@@ -229,7 +229,7 @@ class Microscope(BaseMicroscope):
         objects = frame_collection.get_objects()
         label = frame_collection.primary_label
         yield from plan_stubs.mv(s, label)
-        yield from plan_stubs.trigger_and_read([s], name="computed")
+        yield from plan_stubs.trigger_and_read([s], name="label")
         self.album.add_objects(uid, objects)
         yield from plan_stubs.close_run()
 
@@ -244,7 +244,6 @@ class Microscope(BaseMicroscope):
             coords = [float(point["x"]), float(point["y"])]
             yield from plan_stubs.mv(self.stage, coords)
             yield from self.cellular_objects(channels)
-            break
         
 def inspect_plan(plan):
     msgs = list(plan)
