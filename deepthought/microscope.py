@@ -4,17 +4,15 @@ from devices import Camera, Focus, Channel, AutoFocus, XYStage
 import threading
 from optimization import shannon_dct
 from scanspec.specs import Line
+from scanspec.regions import Circle
 from frames import ObjectsAlbum, Frame, SingleLabelFrames
 from ophyd import Signal
 
 class Disk:
-    def __init__(self, center, num):
-        self.center = center
+    def __init__(self):
+        self.center = [0, 0]
         self.diameter = 13 * 1000  # mm - > um
-
-        # parameter for num of axial widths
-        self.num = num
-
+        self.radius = self.diameter / 2
 
 class BaseMicroscope:
     """Basic abstraction of a microscope.
@@ -82,8 +80,11 @@ class BaseMicroscope:
             stop_y = (width*(num+1)) + start_y
 
         spec = Line("y", start_y, stop_y, num) * \
-            Line("x", start_x, stop_x, num)
-        return spec
+            ~Line("x", start_x, stop_x, num)
+        
+        disk = Disk()
+        circle_spec = spec & Circle("x", "y", *disk.center, disk.radius)
+        return circle_spec
 
     def auto_focus(self):
         initial_z = yield from plan_stubs.rd(self.z)
