@@ -7,9 +7,10 @@ from compute import calculate_anisotropy
 from transform import register
 import numpy as np
 from collections import OrderedDict
-from view import AlbumViewer
+from view import view
 from coords import rc_to_cart
 import pandas as pd
+from data import db
 
 
 class Object:
@@ -108,67 +109,27 @@ class SingleLabelFrames(FrameCollection):
         return self.objects
 
 
-class Album:
-    def __init__(self):
-        self.current_group = "frames"
-        # data[0] = []
-        # data[1] = []
-        # data[2] = []
-        #
-        self.data = OrderedDict()
-
-    def get_data(self):
-        keys = self.data.keys()
-
-        time_data = []
-
-        for key in keys:
-            data = self.frame_set_to_df(self.data[key])
-            time_data.append(data)
-
-        return pd.concat(time_data)
-
-    def frame_set_to_df(self, frame_set):
-        list_of_frame_data = []
-        for frame in frame_set:
-            list_of_frame_data.append(frame.read())
-
-        return pd.DataFrame(list_of_frame_data)
-
-    def add_frame(self, frame, group_name=None):
-        if group_name is None:
-            group_name = self.current_group
-
-        if group_name not in self.data:
-            self.initiate_group(group_name)
-
-        self._add_frame(frame, group_name)
-
-    def _add_frame(self, frame, group_name):
-        self.data[group_name].append(frame)
-
-    def initiate_group(self, name):
-        self.data[name] = []
-
-    def set_current_group(self, name):
-        self.current_group = name
-
-    def view(self):
-        viewer = AlbumViewer(self)
-        viewer.view()
-
-
 class ObjectsAlbum:
     def __init__(self):
         self.objects_group = OrderedDict()
 
     def add_objects(self, uid, objects):
         self.objects_group[uid] = objects
-
     
     def __getitem__(self, value):
         return list(self.objects_group.items())[value][1]
-    
+
+  
+    def get_data_from_uid(self, uid):
+        table = db[uid].table()
+        data = np.stack(table["image"].to_numpy())
+        return data
+
+    def view_raw(self, value):
+        uid = list(self.objects_group.items())[value][0]
+        img = self.get_data_from_uid(uid)
+        view(img)
+
 
 class AnisotropyFrame(Frame):
     """basic unit of anisotropy imaging frame"""
