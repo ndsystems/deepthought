@@ -115,14 +115,16 @@ class SingleLabelFrames(FrameCollection):
 class ObjectsAlbum:
     def __init__(self):
         self.objects_collection_group = OrderedDict()
+        self.detected_objects = []
         self.count = 0
 
     def add_object_collection(self, uid, objects_collection):
         self.objects_collection_group[uid] = objects_collection
         self.count += len(objects_collection.detected_objects)
-    
+        self.detected_objects.extend(objects_collection.detected_objects)
+
     def __getitem__(self, value):
-        return list(self.objects_collection_group.items())[value][1]
+        return self.detected_objects[value]
 
   
     def get_data_from_uid(self, uid):
