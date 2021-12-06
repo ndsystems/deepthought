@@ -5,7 +5,7 @@ import threading
 from optimization import shannon_dct
 from scanspec.specs import Line
 from frames import ObjectsAlbum, Frame, SingleLabelFrames
-
+from ophyd import Signal
 
 class Disk:
     def __init__(self, center, num):
@@ -212,9 +212,10 @@ class Microscope(BaseMicroscope):
                 yield from inner_loop()
 
     def cellular_objects(self, channels):
+        s = Signal(name="label", value=0)
         uid = yield from plan_stubs.open_run()
 
-        self.frame_collection = SingleLabelFrames(channels)
+        frame_collection = SingleLabelFrames(channels)
 
         for ch in channels:
             yield from self.snap_image_and_other_readings_too(ch)
@@ -222,9 +223,12 @@ class Microscope(BaseMicroscope):
             x, y = yield from plan_stubs.rd(self.stage)
             pixel_size = self.pixel_size()
             frame = Frame(img, coords=[x, y], channel=ch, pixel_size=pixel_size)
-            self.frame_collection.add_frame(frame)
+            frame_collection.add_frame(frame)
 
-        objects = self.frame_collection.get_objects()
+        objects = frame_collection.get_objects()
+        label = frame_collection.primary_label
+        yield from plan_stubs.mv(s, label)
+        yield from plan_stubs.trigger_and_read([s], name="computed")
         self.album.add_objects(uid, objects)
         yield from plan_stubs.close_run()
 
@@ -239,7 +243,8 @@ class Microscope(BaseMicroscope):
             coords = [float(point["x"]), float(point["y"])]
             yield from plan_stubs.mv(self.stage, coords)
             yield from self.cellular_objects(channels)
-
+            break
+        
 def inspect_plan(plan):
     msgs = list(plan)
     for m in msgs:
