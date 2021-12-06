@@ -1,11 +1,10 @@
 import numpy as np
 from bluesky import plan_stubs, utils
 from devices import Camera, Focus, Channel, AutoFocus, XYStage
-from compute import axial_length
 import threading
 from optimization import shannon_dct
 from scanspec.specs import Line
-from frames import AnisotropyFrame, Album
+from frames import ObjectsAlbum, Frame, SingleLabelFrames
 
 
 class Disk:
@@ -40,20 +39,27 @@ class BaseMicroscope:
         self.detectors = [self.stage,
                           self.z, self.ch, self.cam.exposure, self.cam]
 
-    def estimate_axial_length(self):
-        """estimate axial length of the detection field of view."""
-        num_px = self.mmc.getImageWidth()
-
+    def pixel_size(self):
+        # temporary work around
+        # do not access mmc directly from Microscope. 
+        # this has to be abstracted as an Objective ophyd device.
         obj_state = int(self.mmc.getProperty("Objective", "State"))
         if obj_state == 4:
             mag = 100
         elif obj_state == 3:
             mag = 60
+
         binning = int(self.mmc.getProperty("left_port", "Binning")[0])
 
         det_px_size = 6.5  # um for andor zyla
-        ax_len = axial_length(num_px, mag, binning, det_px_size)
+        pixel_size = (det_px_size /mag) * binning
+    
+        return pixel_size
 
+    def estimate_axial_length(self):
+        """estimate axial length of the detection field of view."""
+        num_px = self.mmc.getImageWidth()
+        ax_len = self.pixel_size() * num_px
         return ax_len
 
     def generate_grid(self, initial_x, initial_y, num, pos="middle"):
@@ -130,8 +136,9 @@ class BaseMicroscope:
             yield from self.snap_image_and_other_readings_too()
 
     def set_channel(self, channel):
-        """set channels, as defined in MMConfigGroup"""
+        """set MMConfigGroup and camera exposure"""
         yield from plan_stubs.mv(self.ch, channel.name)
+
         if channel.exposure == "auto":
             yield from self.auto_exposure()
         else:
@@ -143,7 +150,7 @@ class Microscope(BaseMicroscope):
 
     def __init__(self, mmc):
         super().__init__(mmc=mmc)
-        self.album = Album()
+        self.album = ObjectsAlbum()
 
     def anisotropy_objects(self, channel):
         """experiment with anisotropy
@@ -160,9 +167,10 @@ class Microscope(BaseMicroscope):
         img = yield from plan_stubs.rd(self.cam)
         x, y = yield from plan_stubs.rd(self.stage)
         frame = AnisotropyFrame(img, coords=[x, y])
+
         self.album.add_frame(frame)
 
-    def scan_an(self, channels):
+    def snap_an(self, channels):
         yield from plan_stubs.open_run()
         for ch in channels:
             yield from self.anisotropy_objects(ch)
@@ -170,18 +178,14 @@ class Microscope(BaseMicroscope):
 
     def scan_an_t(self, channels, cycles=3, delta_t=3):
         for _ in range(cycles):
-            yield from self.scan_an(channels)
+            yield from self.snap_an(channels)
             yield from plan_stubs.sleep(delta_t)
 
-    def scan_an_xy(self, channels, grid=None, num=2):
-        if grid is None:
-            initial_coords = yield from plan_stubs.rd(self.stage)
-            grid = self.generate_grid(*initial_coords, num=num)
-
+    def scan_an_xy(self, channels, grid=None):
         for point in grid.midpoints():
             coords = [float(point["x"]), float(point["y"])]
             yield from plan_stubs.mv(self.stage, coords)
-            yield from self.scan_an(channels)
+            yield from self.snap_an(channels)
 
     def scan_an_xy_t(self, channels, num=2, cycles=1, delta_t=1):
         """Scan a grid over time and compute anisotropy image.
@@ -194,7 +198,7 @@ class Microscope(BaseMicroscope):
 
         def inner_loop():
             self.album.set_current_group(self.current_t)
-            yield from self.scan_an_xy(channels, grid=grid, num=num)
+            yield from self.scan_an_xy(channels, grid=grid)
             yield from plan_stubs.sleep(delta_t)
             self.current_t += 1
 
@@ -207,6 +211,34 @@ class Microscope(BaseMicroscope):
             else:
                 yield from inner_loop()
 
+    def cellular_objects(self, channels):
+        uid = yield from plan_stubs.open_run()
+
+        self.frame_collection = SingleLabelFrames(channels)
+
+        for ch in channels:
+            yield from self.snap_image_and_other_readings_too(ch)
+            img = yield from plan_stubs.rd(self.cam)
+            x, y = yield from plan_stubs.rd(self.stage)
+            pixel_size = self.pixel_size()
+            frame = Frame(img, coords=[x, y], channel=ch, pixel_size=pixel_size)
+            self.frame_collection.add_frame(frame)
+
+        objects = self.frame_collection.get_objects()
+        self.album.add_objects(uid, objects)
+        yield from plan_stubs.close_run()
+
+    def scan_xy(self, channels, grid=None, num=8, initial_coords=None):
+        if initial_coords is None:
+            initial_coords = yield from plan_stubs.rd(self.stage)
+
+        if grid is None:
+            grid = self.generate_grid(*initial_coords, pos="left", num=num)
+
+        for point in grid.midpoints():
+            coords = [float(point["x"]), float(point["y"])]
+            yield from plan_stubs.mv(self.stage, coords)
+            yield from self.cellular_objects(channels)
 
 def inspect_plan(plan):
     msgs = list(plan)

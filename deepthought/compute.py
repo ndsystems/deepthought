@@ -21,15 +21,6 @@ def circularity(perimeter, area):
     return circularity
 
 
-def axial_length(num_px, mag, binning, det_px_size):
-    unit_pixel_in_micron = (det_px_size /
-                            mag) * binning
-
-    total_axial_length = unit_pixel_in_micron * num_px
-
-    return total_axial_length
-
-
 def calculate_anisotropy(parallel, perpendicular, g_factor=0.95, bg=100):
     """Subtract bg, and calculate anisotropy"""
 
