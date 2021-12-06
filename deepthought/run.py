@@ -6,7 +6,8 @@ from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky import RunEngine
 from data import db
 from optimization import shannon_dct
-from view import AlbumViewer
+from detection import NuclearDetector
+from channels import ChannelConfig
 
 
 def configure_RE():
@@ -19,52 +20,28 @@ def configure_RE():
     return RE
 
 
-class ChannelConfig:
-    def __init__(self, name="BF"):
-        self.name = name
-        self.exposure = None
-        self.model = None
-
-        if self.exposure is None:
-            self.exposure = "auto"
-
-    def __repr__(self):
-        return str(self.name)
-
-
-tritc = ChannelConfig("TRITC")
-tritc.exposure = 500
-tritc.model = {"kind": "nuclei",
-               "diameter": 100}
-
-cy5 = ChannelConfig("Cy5")
-cy5.exposure = 1000
-cy5.model = {"kind": "nuclei",
-             "diameter": 100}
-
-dapi = ChannelConfig("DAPI")
-dapi.exposure = 30
-dapi.model = {"kind": "nuclei",
-              "diameter": 100}
-
-fitc = ChannelConfig("FITC")
-fitc.exposure = 500
-fitc.model = {"kind": "nuclei",
-              "diameter": 100}
-
-
-bf = ChannelConfig("BF")
-bf.exposure = "auto"
-bf.model = {"kind": "cyto",
-            "diameter": 150}
-
-
 def snap_image(mmc):
     mmc.snapImage()
     img = mmc.getImage()
     img = np.array(img)
     print(shannon_dct(img))
     napari.view_image(img)
+
+
+dapi = ChannelConfig("DAPI")
+dapi.exposure = 30
+dapi.detector = NuclearDetector()
+dapi.marker = "nuclear"
+
+fitc = ChannelConfig("FITC")
+fitc.exposure = 200
+fitc.detect_with = dapi
+fitc.marker = "g-h2ax"
+
+txred = ChannelConfig("TxRed")
+txred.exposure = 200
+txred.detect_with = dapi
+txred.marker = "p-chk1"
 
 
 if __name__ == "__main__":
@@ -74,7 +51,7 @@ if __name__ == "__main__":
 
     m = Microscope(mmc=scopes["bright_star"])
 
-    plan = m.scan_an_xy_t(channels=[fitc], num=8, cycles=26, delta_t=300)
+    plan = m.scan_xy(channels=[dapi, fitc, txred], num=2, initial_coords=[0, 0])
 
     RE = configure_RE()
     _ = RE(plan)
