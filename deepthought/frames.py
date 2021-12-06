@@ -14,7 +14,7 @@ from data import db
 from process import clear_border
 
 
-class Object:
+class DetectedObject:
     def __init__(self):
         self.vector = OrderedDict()
         self.raster = OrderedDict()
@@ -31,7 +31,7 @@ class Objects:
             self.objects.append(ob)
 
     def region_to_object(self, region):
-        ob = Object()
+        ob = DetectedObject()
         ob.raster[self.channel.marker] = region.intensity_image
         ob.vector["coords"] = region.xy
         return ob
@@ -131,6 +131,13 @@ class ObjectsAlbum:
         img = self.get_data_from_uid(uid)
         view(img)
 
+    def get_coords(self):
+        coords = []
+
+        for uid, objects in self.objects_group.items():
+            coords.extend([ob.vector["coords"] for ob in objects.objects])
+        
+        return coords
 
 class AnisotropyFrame(Frame):
     """basic unit of anisotropy imaging frame"""
