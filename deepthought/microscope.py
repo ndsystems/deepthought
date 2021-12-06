@@ -216,7 +216,7 @@ class Microscope(BaseMicroscope):
         s = Signal(name="label", value=0)
         uid = yield from plan_stubs.open_run()
 
-        frame_collection = SingleLabelFrames(channels)
+        frame_collection = SingleLabelFrames()
 
         for ch in channels:
             yield from self.snap_image_and_other_readings_too(ch)

@@ -88,8 +88,7 @@ class FrameCollection:
 
     An example of a primary label is DAPI image for nuclei identification"""
 
-    def __init__(self, channels):
-        self.channels = channels
+    def __init__(self):
         self.collection = []
 
     def add_frame(self, frame):
@@ -97,8 +96,8 @@ class FrameCollection:
 
 
 class SingleLabelFrames(FrameCollection):
-    def __init__(self, channels):
-        super().__init__(channels)
+    def __init__(self):
+        super().__init__()
 
     def get_objects(self):
         self.primary_label = self.collection[0].get_label()
