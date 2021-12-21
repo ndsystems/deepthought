@@ -31,12 +31,14 @@ import warnings
 from comms import client
 import rpyc
 
+import socket
+
 
 class MMCoreInterface:
     def __init__(self):
         self.clients = dict()
         self.named = dict()
-    
+
     def add(self, ip_addr, name):
         if ip_addr not in self.clients.keys():
             try:
@@ -46,6 +48,19 @@ class MMCoreInterface:
 
             except ConnectionError:
                 print("connection failed")
+
+            except EOFError:
+                mmc = self.connect_client(ip_addr)
+                self.clients[ip_addr] = mmc
+                self.named[name] = mmc
+
+            except socket.timeout:
+                ans = str(input("connection timed out. try again?\n"))
+                if ans == "y":
+                    self.add(ip_addr, name)
+
+                else:
+                    pass
 
     def connect_client(self, addr):
         mmc = client(addr=addr, port=18861).mmc
@@ -63,6 +78,7 @@ class MMCoreInterface:
 
     def __iter__(self):
         return next(self.clients)
+
 
 class BaseScope:
     def __init__(self, mmc=None):
@@ -256,6 +272,45 @@ class Exposure:
         return OrderedDict()
 
 
+class TransmittedIllumination:
+    name = "dia"
+
+    def __init__(self, mmc=None, **kwargs):
+        self.mmc = mmc
+        self.mmc_device_name = "TransmittedIllumination 2"
+
+    def set(self, value):
+        status = Status(obj=self, timeout=10)
+
+        def wait():
+            try:
+                self.mmc.setProperty(
+                    "TransmittedIllumination 2", "Brightness", value)
+                self.mmc.waitForDevice(self.mmc_device_name)
+
+            except Exception as exc:
+                status.set_exception(exc)
+            else:
+                status.set_finished()
+
+        threading.Thread(target=wait).start()
+
+        return status
+
+    def read(self):
+        data = OrderedDict()
+        value = self.mmc.getProperty("TransmittedIllumination 2", "Brightness")
+        data['dia-intensity'] = {'value': int(value), 'timestamp': time.time()}
+        return data
+
+    def describe(self):
+        data = OrderedDict()
+        data['dia-intensity'] = {'source': self.mmc_device_name,
+                                 'dtype': 'number',
+                                 'shape': []}
+        return data
+
+
 class Camera:
     name = "camera"
     parent = None
@@ -408,20 +463,6 @@ class XYStage:
         self.mmc = mmc
         self.mmc_device_name = self.mmc.getXYStageDevice()
 
-    def trigger(self):
-        status = Status(obj=self, timeout=10)
-
-        def wait():
-            try:
-                self.mmc.waitForDevice(self.mmc_device_name)
-            except Exception as exc:
-                status.set_exception(exc)
-            else:
-                status.set_finished()
-
-        threading.Thread(target=wait).start()
-        return status
-
     def read(self):
         data = OrderedDict()
         data['xy'] = {'value': np.array(self.mmc.getXYPosition()),
@@ -432,7 +473,7 @@ class XYStage:
         data = OrderedDict()
         data['xy'] = {'source': "MMCore",
                       'dtype': "array",
-                      'shape': [2,]}
+                      'shape': [2, ]}
         return data
 
     def set(self, value):
@@ -469,8 +510,9 @@ class Channel:
 
     def read(self):
         data = OrderedDict()
-        data['channel'] = {'value': self.mmc.getCurrentConfig(
-            self.config_name), 'timestamp': time.time()}
+        self.mmc.waitForSystem()
+        value = self.mmc.getCurrentConfig(self.config_name)
+        data['channel'] = {'value': value, 'timestamp': time.time()}
         return data
 
     def describe(self):
@@ -487,6 +529,7 @@ class Channel:
             try:
                 self.mmc.setConfig(self.config_name, value)
                 self.mmc.waitForConfig(self.config_name, value)
+                self.mmc.waitForSystem()
 
             except Exception as exc:
                 status.set_exception(exc)
