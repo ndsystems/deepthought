@@ -1,7 +1,7 @@
 rpyc==5.0.1
 tifffile==2020.12.8
 cellpose==0.6
-numpy==1.19.4
+numpy==1.22.0
 scikit-image==0.18.1
 ophyd==1.6.0
 bluesky==1.6.7
