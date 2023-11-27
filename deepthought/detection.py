@@ -40,6 +40,6 @@ class AnisotropyFrameDetector(Detector):
         label = np.zeros_like(image)
 
         label[:midpoint, :] = 1
-        label[midpoint - diff:, :] = 2
+        label[midpoint - diff :, :] = 2
 
         return label

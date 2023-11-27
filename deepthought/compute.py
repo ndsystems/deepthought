@@ -51,16 +51,14 @@ def calculate_r(parallel, perpendicular, g_factor):
     anisotropy_map : ndarray
         Anisotropy image
     """
-    numerator = (parallel - (g_factor * perpendicular))
-    denominator = (parallel + (2 * g_factor * perpendicular))
+    numerator = parallel - (g_factor * perpendicular)
+    denominator = parallel + (2 * g_factor * perpendicular)
 
-    with np.errstate(divide='ignore', invalid='ignore'):
+    with np.errstate(divide="ignore", invalid="ignore"):
         anisotropy_map = np.true_divide(numerator, denominator)
-        anisotropy_map[~ np.isfinite(anisotropy_map)] = 0
+        anisotropy_map[~np.isfinite(anisotropy_map)] = 0
 
     anisotropy_map[anisotropy_map >= 1] = 0
     anisotropy_map[anisotropy_map <= 0] = 0
 
     return anisotropy_map
-
-

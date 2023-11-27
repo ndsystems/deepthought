@@ -11,8 +11,7 @@ class LabelledImage:
 
     def get_regions(self):
         # get individual label regions from image
-        self.regions = measure.regionprops(
-            self.label, intensity_image=self.image)
+        self.regions = measure.regionprops(self.label, intensity_image=self.image)
         return self.regions
 
 
@@ -24,4 +23,3 @@ class Labeller:
     def make(self):
         label = self.detector.detect(self.image)
         return label
-

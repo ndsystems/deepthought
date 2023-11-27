@@ -8,19 +8,23 @@ microscope.
 
 1. You could optionally use a virtual environment.
 
-```
+```cmd
 $ python -m pip install virtualenv
 $ python -m virtualenv deepthought
 $ source deepthought/bin/activate
 $ python -m pip install -U pip
-```
+``````
 
 2. Install with:
-   `$ python -m pip install -e .`
+   ```cmd
+   $ python -m pip install -e .
+   ```
 
 ## How to run
 
-`$ python run.py`
+```cmd 
+$ python run.py
+```
 
 ## Troubleshooting
 
@@ -42,7 +46,7 @@ to test if you have been succesfull,
 
 accessing data programmatically
 
-```
+```python
 from data import db
 
 # returns the databroker.Header object which can give you the data in many forms

@@ -16,14 +16,8 @@ def read_env_value(name, default):
     return value
 
 
-MM_DIR = {
-    "name": "MM_DIR",
-    "default": "C:\Program Files\Micro-Manager-2.0gamma"
-}
-MM_CONFIG = {
-    "name": "MM_CONFIG",
-    "default": "./mmconfigs/Bright_Star.cfg"
-}
+MM_DIR = {"name": "MM_DIR", "default": "C:\Program Files\Micro-Manager-2.0gamma"}
+MM_CONFIG = {"name": "MM_CONFIG", "default": "./mmconfigs/Bright_Star.cfg"}
 MM_SERVER = {
     "name": "MM_SERVER",
     "default": "localhost",
