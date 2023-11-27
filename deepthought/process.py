@@ -31,7 +31,7 @@ def median(image, **kwds):
     -------
     image : (N, M) array
         Median filtered image
-    """    
+    """
     return ndi.median_filter(image, **kwds)
 
 
@@ -47,7 +47,7 @@ def gaussian(image, **kwds):
     -------
     image : (N, M) array
         Gaussian filtered image
-    """    
+    """
     return ndi.filters.gaussian_filter(image, **kwds)
 
 
@@ -66,7 +66,7 @@ def remove_small(image, min_size=5, **kwds):
     -------
     image : (N, M) bool array
         Binary image
-    """    
+    """
     return morphology.remove_small_objects(image, min_size, **kwds)
 
 
@@ -104,6 +104,7 @@ def fill_holes(image, **kwds):
 
     """
     return ndi.binary_fill_holes(image, **kwds)
+
 
 def label(binary_image):
     _label = measure.label(binary_image)

@@ -2,4 +2,4 @@
 
 import forallpeople as si
 
-microns = 1E-6 * si.m
+microns = 1e-6 * si.m

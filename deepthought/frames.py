@@ -32,7 +32,6 @@ class ObjectsCollection:
 
         del self.regions
 
-
     def region_to_object(self, region):
         ob = DetectedObject()
         ob.raster[self.channel.marker] = region.intensity_image
@@ -42,6 +41,7 @@ class ObjectsCollection:
     def merge_secondary(self, objs):
         for primary, secondary in zip(self.detected_objects, objs.detected_objects):
             primary.raster.update(secondary.raster)
+
 
 class Frame:
     """basic unit of data from the microscope"""
@@ -126,7 +126,6 @@ class ObjectsAlbum:
     def __getitem__(self, value):
         return self.detected_objects[value]
 
-  
     def get_data_from_uid(self, uid):
         table = db[uid].table()
         data = np.stack(table["image"].to_numpy())
@@ -141,9 +140,15 @@ class ObjectsAlbum:
         coords = []
 
         for uid, objects_collection in self.objects_group.items():
-            coords.extend([detected_obj.vector["coords"] for detected_obj in objects_collection.detected_objects])
-        
+            coords.extend(
+                [
+                    detected_obj.vector["coords"]
+                    for detected_obj in objects_collection.detected_objects
+                ]
+            )
+
         return coords
+
 
 class AnisotropyFrame(Frame):
     """basic unit of anisotropy imaging frame"""
@@ -162,8 +167,9 @@ class AnisotropyFrame(Frame):
         self.parallel = self.label.result.objects[0].intensity_image
         self.perpendicular = self.label.result.objects[1].intensity_image
 
-        self.parallel, self.perpendicular = pad_images_similar(self.parallel,
-                                                               self.perpendicular)
+        self.parallel, self.perpendicular = pad_images_similar(
+            self.parallel, self.perpendicular
+        )
 
         self.perpendicular = register(self.parallel, self.perpendicular)
 

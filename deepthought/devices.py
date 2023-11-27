@@ -162,9 +162,9 @@ class Illumination(pE4000):
 def random_crop(image, size=512):
     """generate a random crop of the image for the given size"""
     x, y = image.shape
-    random_x = np.random.randint(0, int(x/2))
-    random_y = np.random.randint(0, int(y/2))
-    cropped_image = image[random_x:random_x+size, random_y:random_y+size]
+    random_x = np.random.randint(0, int(x / 2))
+    random_y = np.random.randint(0, int(y / 2))
+    cropped_image = image[random_x : random_x + size, random_y : random_y + size]
     return cropped_image
 
 
@@ -172,7 +172,7 @@ def frame_crop(image, size=512, tol=100):
     """generate a random crop of the image for the given size"""
     error = np.random.randint(0, tol)
     x, y = 150, 250
-    cropped_image = image[x+error:x+size+error, y+error:y+size+error]
+    cropped_image = image[x + error : x + size + error, y + error : y + size + error]
     return cropped_image
 
 
@@ -186,14 +186,12 @@ class Focus:
 
     def read(self):
         data = OrderedDict()
-        data['z'] = {'value': self.mmc.getPosition(), 'timestamp': time.time()}
+        data["z"] = {"value": self.mmc.getPosition(), "timestamp": time.time()}
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['z'] = {'source': "MMCore",
-                     'dtype': "number",
-                     'shape': []}
+        data["z"] = {"source": "MMCore", "dtype": "number", "shape": []}
         return data
 
     def set(self, value):
@@ -254,15 +252,12 @@ class Exposure:
 
     def read(self):
         data = OrderedDict()
-        data['exposure'] = {
-            'value': self.mmc.getExposure(), 'timestamp': time.time()}
+        data["exposure"] = {"value": self.mmc.getExposure(), "timestamp": time.time()}
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['exposure'] = {'source': "MMCore",
-                            'dtype': "number",
-                            'shape': []}
+        data["exposure"] = {"source": "MMCore", "dtype": "number", "shape": []}
         return data
 
     def read_configuration(self) -> OrderedDict:
@@ -284,8 +279,7 @@ class TransmittedIllumination:
 
         def wait():
             try:
-                self.mmc.setProperty(
-                    "TransmittedIllumination 2", "Brightness", value)
+                self.mmc.setProperty("TransmittedIllumination 2", "Brightness", value)
                 self.mmc.waitForDevice(self.mmc_device_name)
 
             except Exception as exc:
@@ -300,14 +294,16 @@ class TransmittedIllumination:
     def read(self):
         data = OrderedDict()
         value = self.mmc.getProperty("TransmittedIllumination 2", "Brightness")
-        data['dia-intensity'] = {'value': int(value), 'timestamp': time.time()}
+        data["dia-intensity"] = {"value": int(value), "timestamp": time.time()}
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['dia-intensity'] = {'source': self.mmc_device_name,
-                                 'dtype': 'number',
-                                 'shape': []}
+        data["dia-intensity"] = {
+            "source": self.mmc_device_name,
+            "dtype": "number",
+            "shape": [],
+        }
         return data
 
 
@@ -362,14 +358,16 @@ class Camera:
 
     def read(self) -> OrderedDict:
         data = OrderedDict()
-        data['image'] = {'value': self.image, 'timestamp': self.image_time}
+        data["image"] = {"value": self.image, "timestamp": self.image_time}
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['image'] = {'source': self.mmc_device_name,
-                         'dtype': 'array',
-                         'shape': self.image.shape}
+        data["image"] = {
+            "source": self.mmc_device_name,
+            "dtype": "array",
+            "shape": self.image.shape,
+        }
         return data
 
     def subscribe(self, func):
@@ -433,15 +431,15 @@ class AutoFocus:
 
     def read(self) -> OrderedDict:
         data = OrderedDict()
-        data['zdc'] = {'value': self.mmc.isContinuousFocusEnabled(),
-                       'timestamp': time.time()}
+        data["zdc"] = {
+            "value": self.mmc.isContinuousFocusEnabled(),
+            "timestamp": time.time(),
+        }
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['zdc'] = {'source': self.mmc_device_name,
-                       'dtype': 'boolean',
-                       'shape': []}
+        data["zdc"] = {"source": self.mmc_device_name, "dtype": "boolean", "shape": []}
         return data
 
     def subscribe(self, func):
@@ -465,15 +463,21 @@ class XYStage:
 
     def read(self):
         data = OrderedDict()
-        data['xy'] = {'value': np.array(self.mmc.getXYPosition()),
-                      'timestamp': time.time()}
+        data["xy"] = {
+            "value": np.array(self.mmc.getXYPosition()),
+            "timestamp": time.time(),
+        }
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['xy'] = {'source': "MMCore",
-                      'dtype': "array",
-                      'shape': [2, ]}
+        data["xy"] = {
+            "source": "MMCore",
+            "dtype": "array",
+            "shape": [
+                2,
+            ],
+        }
         return data
 
     def set(self, value):
@@ -512,14 +516,12 @@ class Channel:
         data = OrderedDict()
         self.mmc.waitForSystem()
         value = self.mmc.getCurrentConfig(self.config_name)
-        data['channel'] = {'value': value, 'timestamp': time.time()}
+        data["channel"] = {"value": value, "timestamp": time.time()}
         return data
 
     def describe(self):
         data = OrderedDict()
-        data['channel'] = {'source': "MMCore",
-                           'dtype': "string",
-                           'shape': []}
+        data["channel"] = {"source": "MMCore", "dtype": "string", "shape": []}
         return data
 
     def set(self, value):

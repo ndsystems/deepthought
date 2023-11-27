@@ -102,8 +102,10 @@ def cart_to_rc(points=None, deltao=None, image=None):
     if points is not None:
         if deltao is None:
             if image is None:
-                msg = ('When converting coordinates, either `deltao` or `image` '
-                       'have to be specified.')
+                msg = (
+                    "When converting coordinates, either `deltao` or `image` "
+                    "have to be specified."
+                )
                 raise ValueError(msg)
             else:
                 deltao = image.shape[1] - 1
@@ -150,8 +152,10 @@ def rc_to_cart(points=None, deltao=None, image=None):
     if points is not None:
         if deltao is None:
             if image is None:
-                msg = ('When converting coordinates, either `deltao` or `image` '
-                       'have to be specified.')
+                msg = (
+                    "When converting coordinates, either `deltao` or `image` "
+                    "have to be specified."
+                )
                 raise ValueError(msg)
             else:
                 deltao = image.shape[0] - 1
@@ -231,4 +235,3 @@ def cart_to_xy(points=None, deltao=None, image=None):
     points_out, image_out = rc_to_xy(p, i)
 
     return points_out, image_out
-
