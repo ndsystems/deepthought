@@ -1,4 +1,4 @@
-rpyc==5.0.1
+rpyc==6.0.0
 tifffile==2020.12.8
 cellpose==0.6
 numpy==1.22.0
