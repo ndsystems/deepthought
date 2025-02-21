@@ -1,8 +1,9 @@
-"""
-abstraction of devices
+"""Device abstractions for microscope control.
+
+This module provides interfaces for controlling microscope hardware components
+including cameras, stages, and illumination devices.
 
 References:
-
 1. https://nsls-ii.github.io/ophyd/architecture.html#uniform-high-level-interface
 2. https://github.com/SEBv15/GSD192-tools
 """
@@ -10,7 +11,7 @@ References:
 import threading
 import time
 from collections import OrderedDict
-from typing import Any, Dict, List, Tuple, TypeVar
+from typing import Any, Dict, List, Tuple, TypeVar, Optional
 
 from ophyd import Component, Device
 from ophyd import DynamicDeviceComponent as DDCpt
@@ -35,32 +36,30 @@ import socket
 
 
 class MMCoreInterface:
-    def __init__(self):
-        self.clients = dict()
-        self.named = dict()
+    """Interface for managing multiple MMCore client connections."""
+    
+    def __init__(self) -> None:
+        self.clients: Dict[str, Any] = {}
+        self.named: Dict[str, Any] = {}
 
-    def add(self, ip_addr, name):
-        if ip_addr not in self.clients.keys():
+    def add(self, ip_addr: str, name: str) -> None:
+        """Add a new MMCore client connection.
+        
+        Args:
+            ip_addr: IP address of the MMCore server
+            name: Friendly name for this connection
+        """
+        if ip_addr not in self.clients:
             try:
                 mmc = self.connect_client(ip_addr)
                 self.clients[ip_addr] = mmc
                 self.named[name] = mmc
-
-            except ConnectionError:
-                print("connection failed")
-
-            except EOFError:
-                mmc = self.connect_client(ip_addr)
-                self.clients[ip_addr] = mmc
-                self.named[name] = mmc
-
+            except (ConnectionError, EOFError) as e:
+                print(f"Connection failed: {e}")
             except socket.timeout:
-                ans = str(input("connection timed out. try again?\n"))
-                if ans == "y":
+                retry = input("Connection timed out. Try again? (y/n)\n").lower()
+                if retry == "y":
                     self.add(ip_addr, name)
-
-                else:
-                    pass
 
     def connect_client(self, addr):
         mmc = client(addr=addr, port=18861).mmc
@@ -81,20 +80,26 @@ class MMCoreInterface:
 
 
 class BaseScope:
-    def __init__(self, mmc=None):
+    """Base class for microscope functionality."""
+    
+    def __init__(self, mmc: Optional[Any] = None) -> None:
         self.mmc = mmc
 
-    def device_properties(self, device):
-        """get property names and values for the given device"""
+    def device_properties(self, device: str) -> Dict[str, Any]:
+        """Get property names and values for the given device.
+        
+        Args:
+            device: Name of the device
+            
+        Returns:
+            Dictionary of property names and their values
+        """
         device_props = {}
-
         property_names = self.mmc.getDevicePropertyNames(device)
-
-        for property_name in property_names:
-            value = self.mmc.getProperty(device, property_name)
-            device_props[property_name] = value
-
-        return device_props
+        return {
+            prop_name: self.mmc.getProperty(device, prop_name)
+            for prop_name in property_names
+        }
 
     def properties(self):
         """get property names and values for all loaded devices in scope"""
@@ -308,16 +313,25 @@ class TransmittedIllumination:
 
 
 class Camera:
+    """Interface for microscope camera control."""
+    
     name = "camera"
-    parent = None
-
-    def __init__(self, mmc=None, **kwargs):
+    
+    def __init__(self, mmc: Optional[Any] = None, **kwargs) -> None:
         self.mmc = mmc
-        self.cam_name = "left_port"
+        self._cam_name = "left_port"  # Use single underscore for "private" attrs
         self.exposure = Exposure(self.mmc)
-        self.mmc_device_name = str(self.mmc.getCameraDevice())
+        self._mmc_device_name = str(self.mmc.getCameraDevice())
+        self._subscribers: List[Any] = []
+        self._image: Optional[np.ndarray] = None
+        self._image_time: Optional[float] = None
 
-        self._subscribers = []
+    @property
+    def image(self) -> np.ndarray:
+        """Most recent captured image."""
+        if self._image is None:
+            raise ValueError("No image captured yet")
+        return self._image
 
     def _collection_callback(self):
         for subscriber in self._subscribers:
