@@ -125,6 +125,25 @@ async def update_view(perception):
 experiment.run(callback=update_view)
 ```
 
+## Version
+
+Current version: 2.0.0-alpha.0
+
+DeepThought follows [Semantic Versioning](https://semver.org/) with additional alpha/beta release designations:
+
+- Version format: `MAJOR.MINOR.PATCH-RELEASE_TYPE.NUMBER`
+  - `MAJOR`: Incompatible API changes
+  - `MINOR`: New features in a backward compatible manner
+  - `PATCH`: Backward compatible bug fixes
+  - `RELEASE_TYPE`: alpha/beta/rc/final
+  - `NUMBER`: Sub-version for alpha/beta releases (0, 1, 2, etc.)
+
+Examples:
+- `2.0.0-alpha.0`: First alpha release of version 2.0.0
+- `2.0.0-alpha.1`: Second alpha release with improvements
+- `2.0.0-beta.0`: First beta release
+- `2.0.0`: Final release
+
 ## Project Structure
 
 ```

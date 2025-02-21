@@ -1,9 +1,12 @@
 """Install deepthought."""
 
-from setuptools import setup
-from setuptools import find_packages
+import os
+from setuptools import setup, find_packages
 
-VERSION = "0.0.1"
+# Get version from version.py
+exec(open('deepthought/version.py').read())
+
+VERSION = __version__
 PROJECT_URL = "https://github.com/ndsystems/deepthought"
 DOWNLOAD_URL = "{}/releases/tag/v{}".format(PROJECT_URL, VERSION)
 
