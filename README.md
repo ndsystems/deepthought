@@ -1,14 +1,36 @@
 # deepthought
 
-A domain-driven microscopy automation library built on Bluesky and Micro-Manager for automated microscopy experiments.
+A domain-driven microscopy automation library built on an action-perception loop architecture, integrating with Bluesky and Micro-Manager for intelligent microscopy experiments.
 
 ## Features
 
+### Core Architecture
+
+- **Action-Perception Loop**: Natural workflow that matches how microscopists work
+  - Atomic actions with state validation
+  - Incremental perception updates
+  - Adaptive decision making
+  - Real-time visualization
+
+- **Composable Strategies**
+  - Cell tracking
+  - Sample mapping
+  - Multi-channel acquisition
+  - Focus mapping
+  - Dynamic adaptation
+
+- **Flexible Workflows**
+  - Cell tracking experiments
+  - Tissue mapping
+  - Multi-modal imaging
+  - Adaptive protocols
+
+### Technical Features
+
 - Clean hardware abstraction layer for microscope devices
-- Flexible experiment planning and acquisition
+- Bluesky integration for experiment tracking and data management
+- Real-time visualization with quality metrics
 - Built-in image processing and analysis
-- Integration with Bluesky's RunEngine and DataBroker
-- Real-time visualization and monitoring
 
 ## Installation
 
@@ -33,82 +55,123 @@ python -m pip install -e .
 
 ## Quick Start
 
+### Basic Cell Tracking Experiment
+
 ```python
-from deepthought.microscope import Microscope, MicroscopeConfig
-from bluesky import RunEngine
+from deepthought.microscopy_workflows import CellTrackingExperiment
+from deepthought.microscope import ActionPerceptionMicroscope
+from datetime import timedelta
 
-# Initialize microscope with Micro-Manager core
-microscope = Microscope(mmc)  # assuming mmc (Micro-Manager core) is available
+# Initialize microscope
+microscope = ActionPerceptionMicroscope(mmc)  # assuming mmc is available
 
-# Optional: Customize microscope configuration
-microscope.config = MicroscopeConfig(
-    detector_pixel_size=6.5,  # um for Andor Zyla
-    max_exposure=5000,  # ms
-    exposure_target=0.5
+# Configure experiment
+experiment = CellTrackingExperiment(
+    duration=timedelta(hours=1),
+    interval=timedelta(seconds=30),
+    channels={
+        "DAPI": 30,    # ms exposure
+        "FITC": 200,   # ms exposure
+        "TxRed": 200   # ms exposure
+    },
+    target_cell_type="cell",
+    min_cells=10
 )
 
-# Option 1: Direct usage
-# This will generate a plan and run it internally
-grid_scan = microscope.grid_scan(
-    channels=["DAPI", "RFP"],
-    grid=(3, 3),  # 3x3 grid
-    settle_time=0.1  # wait 100ms between positions
-)
-
-# Option 2: Use with Bluesky's RunEngine
-# This gives you more control over execution and data collection
-RE = RunEngine({})
-plan = microscope.plans.grid_scan(
-    microscope,
-    channels=["DAPI", "RFP"],
-    grid=(3, 3),
-    settle_time=0.1
-)
-RE(plan)
-
-# Auto-focus and exposure optimization are also available as plans
-RE(microscope.auto_focus())
-RE(microscope.auto_exposure())
+# Run experiment
+results = await experiment.run(initial_state)
 ```
 
-## Data Access
+### Custom Strategy Implementation
 
-The library uses databroker for data management. To access experimental data:
+```python
+from deepthought.microscopy_loop import ObservationStrategy, MicroscopeAction
 
-1. Configure databroker catalog:
-   ```bash
-   # Find databroker config location
-   python -c "import databroker; print(databroker.catalog_search_path())"
-   
-   # Copy and edit catalog configuration
-   cp ./catalog.yml /path/to/databroker/config/
-   ```
+class CustomStrategy(ObservationStrategy):
+    """Example custom observation strategy"""
+    
+    def next_action(self, perception):
+        # Make decisions based on current perception
+        if not perception.has_focus():
+            return AutoFocusAction()
+            
+        if perception.needs_new_position():
+            return MoveStageTo(self.next_position())
+            
+        return AcquireImageAction(self.current_channel())
+    
+    def is_complete(self, perception):
+        return self.goals_achieved(perception)
+```
 
-2. Access data programmatically:
-   ```python
-   from microscope.storage import db
-   
-   # Get latest experiment
-   header = db[-1]
-   
-   # Access data as pandas DataFrame
-   df = header.table()
-   ```
+### Real-time Visualization
+
+```python
+from deepthought.run import ActionPerceptionViewer
+
+# Create viewer
+viewer = ActionPerceptionViewer()
+
+# Update callback
+async def update_view(perception):
+    viewer.update_perception(perception)
+    # Shows:
+    # - Detected cells
+    # - Current field of view
+    # - Quality metrics
+    await asyncio.sleep(0.1)
+
+# Run experiment with visualization
+experiment.run(callback=update_view)
+```
 
 ## Project Structure
 
 ```
-microscope/
-├── hardware/      # Device control and hardware interfaces
-├── acquisition/   # Experiment planning and execution
-├── analysis/      # Image processing and object detection
-├── config/        # Configuration management
-├── storage/       # Data access and persistence
-└── visualization/ # Real-time display and results viewing
+deepthought/
+├── microscopy_loop.py     # Core action-perception loop
+├── microscopy_strategies.py  # Observation strategies
+├── microscopy_workflows.py   # High-level experiments
+├── microscope.py         # Hardware interface
+├── observation.py        # Perception management
+├── biology.py           # Biological entity models
+└── run.py              # Main entry point
 ```
 
-## Troubleshooting
+## Architecture Overview
 
-- **LLVM Issues**: If you encounter errors with `llvmlite` (required by `numba`) and have `llvm11` installed, downgrade to `llvm10`.
-- For more troubleshooting tips, see our [documentation](docs/troubleshooting.md).
+### Action-Perception Loop
 
+The system operates on a continuous loop of:
+1. **Observe**: Gather data about the current state
+2. **Perceive**: Update understanding of the sample
+3. **Decide**: Choose next action based on current perception
+4. **Act**: Execute chosen action
+5. **Validate**: Ensure action completed successfully
+
+### Strategies
+
+Strategies are composable and can be combined for complex experiments:
+
+```python
+strategy = CompositeStrategy([
+    FocusMapStrategy(positions),
+    MapSampleStrategy(center, size),
+    MultiChannelAcquisitionStrategy(channels)
+])
+```
+
+### Bluesky Integration
+
+All actions and perceptions are logged to Bluesky's database:
+- Experiment metadata
+- Action history with parameters and results
+- Perception state evolution
+- Quality metrics
+
+
+## License
+
+This project is proprietary software owned by nDimensional Systems. The source code is available for viewing and educational purposes only. Any use, modification, or distribution requires explicit written permission.
+
+For licensing inquiries, please contact: pskeshu@gmail.com
