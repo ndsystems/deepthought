@@ -34,22 +34,41 @@ python -m pip install -e .
 ## Quick Start
 
 ```python
-from microscope import Microscope
-from microscope.acquisition import GridScanPlan
-from microscope.config import MicroscopeConfig
+from deepthought.microscope import Microscope, MicroscopeConfig
+from bluesky import RunEngine
 
-# Initialize microscope
-config = MicroscopeConfig.from_file("config.yml")
-microscope = Microscope(config)
+# Initialize microscope with Micro-Manager core
+microscope = Microscope(mmc)  # assuming mmc (Micro-Manager core) is available
 
-# Create and run experiment
-plan = GridScanPlan(
-    channels=["DAPI", "GFP"],
-    grid_size=(3, 3),
-    exposure_ms=100
+# Optional: Customize microscope configuration
+microscope.config = MicroscopeConfig(
+    detector_pixel_size=6.5,  # um for Andor Zyla
+    max_exposure=5000,  # ms
+    exposure_target=0.5
 )
 
-results = microscope.run(plan)
+# Option 1: Direct usage
+# This will generate a plan and run it internally
+grid_scan = microscope.grid_scan(
+    channels=["DAPI", "RFP"],
+    grid=(3, 3),  # 3x3 grid
+    settle_time=0.1  # wait 100ms between positions
+)
+
+# Option 2: Use with Bluesky's RunEngine
+# This gives you more control over execution and data collection
+RE = RunEngine({})
+plan = microscope.plans.grid_scan(
+    microscope,
+    channels=["DAPI", "RFP"],
+    grid=(3, 3),
+    settle_time=0.1
+)
+RE(plan)
+
+# Auto-focus and exposure optimization are also available as plans
+RE(microscope.auto_focus())
+RE(microscope.auto_exposure())
 ```
 
 ## Data Access

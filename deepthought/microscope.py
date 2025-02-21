@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, Generator
 from dataclasses import dataclass
 from bluesky import plan_stubs, utils
 from devices import Camera, Focus, Channel, AutoFocus, XYStage
@@ -295,47 +295,137 @@ class ExperimentController:
         """Get all detected objects from the album."""
         return self.album.detected_objects
 
+class Plans:
+    """Collection of experimental plans that can be executed by the RunEngine."""
+    
+    @staticmethod
+    def grid_scan(
+        microscope: 'Microscope',
+        channels: List[str],
+        grid: Optional[Tuple[int, int]] = None,
+        num: int = 8,
+        initial_coords: Optional[Tuple[float, float]] = None,
+        settle_time: float = 0.1
+    ) -> Generator:
+        """
+        Plan for performing a grid scan.
+        
+        Parameters
+        ----------
+        microscope : Microscope
+            The microscope instance to use for scanning
+        channels : List[str]
+            List of channel names to acquire
+        grid : Tuple[int, int], optional
+            Grid dimensions (rows, cols)
+        num : int
+            Number of positions to scan if grid not specified
+        initial_coords : Tuple[float, float], optional
+            Starting coordinates for the scan
+        settle_time : float
+            Time to wait for stage settling between positions
+            
+        Yields
+        ------
+        Generator
+            Bluesky plan messages
+        """
+        try:
+            current_pos = initial_coords or (0.0, 0.0)
+            positions = microscope._generate_scan_positions(grid, num, current_pos)
+            
+            yield from plan_stubs.open_run()
+            
+            for pos in positions:
+                # Move to position
+                yield from plan_stubs.mv(microscope.hardware.stage, *pos)
+                
+                # Acquire frames for each channel
+                for channel in channels:
+                    yield from microscope.hardware.snap_image_and_other_readings_too(channel)
+                
+                # Wait for settling
+                if settle_time > 0:
+                    yield from plan_stubs.sleep(settle_time)
+            
+            yield from plan_stubs.close_run()
+            
+        except Exception as e:
+            raise MicroscopeError(f"Grid scan failed: {str(e)}")
+    
+    @staticmethod
+    def auto_focus(microscope: 'Microscope') -> Generator:
+        """
+        Plan for auto-focusing the microscope.
+        
+        Parameters
+        ----------
+        microscope : Microscope
+            The microscope instance to focus
+            
+        Yields
+        ------
+        Generator
+            Bluesky plan messages
+        """
+        yield from microscope.hardware.auto_focus()
+    
+    @staticmethod
+    def auto_exposure(microscope: 'Microscope') -> Generator:
+        """
+        Plan for optimizing exposure time.
+        
+        Parameters
+        ----------
+        microscope : Microscope
+            The microscope instance to optimize exposure for
+            
+        Yields
+        ------
+        Generator
+            Bluesky plan messages
+        """
+        yield from microscope.hardware.auto_exposure()
+
 class Microscope:
     """Main microscope interface combining hardware and experiment control."""
     
     def __init__(self, mmc):
         self.hardware = MicroscopeHardware(mmc)
         self.experiment = ExperimentController(self.hardware)
+        self.plans = Plans()
 
-    async def scan_xy(self, 
-                     channels: List[str], 
-                     grid: Optional[Tuple[int, int]] = None, 
-                     num: int = 8, 
-                     initial_coords: Optional[Tuple[float, float]] = None):
-        """Perform XY scanning with improved error handling."""
-        try:
-            current_pos = initial_coords or (0.0, 0.0)
-            
-            # Generate scanning positions
-            positions = self._generate_scan_positions(grid, num, current_pos)
-            
-            for pos in positions:
-                # Move to position
-                yield from plan_stubs.mv(self.hardware.stage, *pos)
-                
-                # Acquire and process frames
-                collection_id = await self.experiment.acquire_multichannel(pos, channels)
-                
-                # Optional: wait for stage settling
-                yield from plan_stubs.sleep(0.1)
-                
-        except Exception as e:
-            # Add proper logging here
-            raise MicroscopeError(f"Scan failed: {str(e)}")
+    def grid_scan(self, *args, **kwargs) -> Generator:
+        """Convenience method to run a grid scan plan."""
+        return Plans.grid_scan(self, *args, **kwargs)
+    
+    def auto_focus(self) -> Generator:
+        """Convenience method to run auto-focus plan."""
+        return Plans.auto_focus(self)
+    
+    def auto_exposure(self) -> Generator:
+        """Convenience method to run auto-exposure plan."""
+        return Plans.auto_exposure(self)
 
     def _generate_scan_positions(self, 
                                grid: Optional[Tuple[int, int]], 
                                num: int, 
                                start_pos: Tuple[float, float]) -> List[Tuple[float, float]]:
         """Generate scanning positions based on parameters."""
-        # Implementation of scanning pattern generation
-        # ... existing code ...
-        pass
+        if grid is not None:
+            rows, cols = grid
+            # Generate grid positions
+            positions = []
+            for i in range(rows):
+                for j in range(cols):
+                    x = start_pos[0] + j * self.hardware.estimate_axial_length()
+                    y = start_pos[1] + i * self.hardware.estimate_axial_length()
+                    positions.append((x, y))
+            return positions
+        else:
+            # Use the existing grid generation logic for num points
+            grid_spec = self.hardware.generate_grid(*start_pos, num=num)
+            return [(p['x'], p['y']) for p in grid_spec.midpoints()]
 
 def inspect_plan(plan):
     msgs = list(plan)
