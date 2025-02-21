@@ -1,145 +1,168 @@
 # model describing unit data from the microscope
 
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Protocol
+import numpy as np
+from collections import OrderedDict
+
 from labels import Labeller, LabelledImage
 from detection import AnisotropyFrameDetector, NuclearDetector
 from utils import pad_images_similar
 from compute import calculate_anisotropy
 from transform import register
-import numpy as np
-from collections import OrderedDict
 from view import view
 from coords import rc_to_cart
 import pandas as pd
 from data import db
 from process import clear_border
 
+@dataclass
+class FrameMetadata:
+    """Metadata for microscopy frames."""
+    coords: Tuple[float, float]
+    pixel_size: float
+    channel: Optional[str] = None
 
+@dataclass
 class DetectedObject:
+    """Representation of a detected microscopy object."""
+    coords: np.ndarray
+    intensity_data: Dict[str, np.ndarray]
+    properties: Dict[str, any]
+
     def __init__(self):
         self.vector = OrderedDict()
         self.raster = OrderedDict()
 
-
-class ObjectsCollection:
-    def __init__(self, channel, regions):
+class ObjectCollection:
+    """Efficient collection of detected objects."""
+    
+    def __init__(self, channel: str, regions: List):
         self.channel = channel
-        self.regions = regions
-        self.detected_objects = []
+        self.detected_objects: List[DetectedObject] = []
+        self._process_regions(regions)
 
-        for region in self.regions:
-            ob = self.region_to_object(region)
-            self.detected_objects.append(ob)
+    def _process_regions(self, regions: List) -> None:
+        """Process regions into detected objects."""
+        for region in regions:
+            obj = self._region_to_object(region)
+            self.detected_objects.append(obj)
 
-        del self.regions
+    def _region_to_object(self, region) -> DetectedObject:
+        """Convert region to DetectedObject."""
+        obj = DetectedObject()
+        obj.raster[self.channel] = region.intensity_image
+        obj.vector["coords"] = region.xy
+        return obj
 
-    def region_to_object(self, region):
-        ob = DetectedObject()
-        ob.raster[self.channel.marker] = region.intensity_image
-        ob.vector["coords"] = region.xy
-        return ob
-
-    def merge_secondary(self, objs):
-        for primary, secondary in zip(self.detected_objects, objs.detected_objects):
+    def merge_secondary(self, other: 'ObjectCollection') -> None:
+        """Merge secondary channel data into primary objects."""
+        for primary, secondary in zip(self.detected_objects, other.detected_objects):
             primary.raster.update(secondary.raster)
 
-
 class Frame:
-    """basic unit of data from the microscope"""
+    """Base class for microscopy frames."""
 
-    def __init__(self, image, coords, channel, pixel_size):
+    def __init__(self, 
+                 image: np.ndarray, 
+                 coords: Tuple[float, float],
+                 channel: str,
+                 pixel_size: float):
         self.image = image
-        self.coords = coords
+        self.metadata = FrameMetadata(
+            coords=coords,
+            pixel_size=pixel_size,
+            channel=channel
+        )
         self.channel = channel
-        self.pixel_size = pixel_size
 
-    def clean_up(self):
-        del self.image
+    def clean_up(self) -> None:
+        """Release frame resources."""
+        if hasattr(self, 'image'):
+            del self.image
 
-    def get_label(self):
-        image = self.image
+    def get_label(self) -> np.ndarray:
+        """Get frame label mask."""
         detector = self.channel.detector
-        frame_label = Labeller(image, detector).make()
-        cleared = clear_border(frame_label)
-        return cleared
+        frame_label = Labeller(self.image, detector).make()
+        return clear_border(frame_label)
 
-    def get_objects(self, frame_label):
+    def get_objects(self, frame_label: np.ndarray) -> ObjectCollection:
+        """Extract objects from frame using label mask."""
         regions = LabelledImage(self.image, frame_label).get_regions()
-        regions = self.correct_frame_object_xy(regions, self.image)
-        objects = ObjectsCollection(channel=self.channel, regions=regions)
-        return objects
+        regions = self._correct_object_coordinates(regions)
+        return ObjectCollection(channel=self.channel, regions=regions)
 
-    def correct_frame_object_xy(self, regions, image):
-        # coordinate transformation from rc to cartesian
+    def _correct_object_coordinates(self, regions: List) -> List:
+        """Transform region coordinates to global space."""
         for reg in regions:
             rc_coords = np.array([reg.centroid])
-            coords, _ = rc_to_cart(rc_coords, image=image)
+            coords, _ = rc_to_cart(rc_coords, image=self.image)
             x, y = coords[0]
-            x = x * self.pixel_size
-            y = y * self.pixel_size
-            x_microns = np.around(x + self.coords[0])
-            y_microns = np.around(y + self.coords[1])
-            reg.xy = [x_microns, y_microns]
-
+            x = x * self.metadata.pixel_size
+            y = y * self.metadata.pixel_size
+            reg.xy = [
+                round(x + self.metadata.coords[0]),
+                round(y + self.metadata.coords[1])
+            ]
         return regions
 
-
 class FrameCollection:
-    """collection of frames, that are to be processed together and has a primary label identifying
-    objects of common interest.
-
-    An example of a primary label is DAPI image for nuclei identification"""
+    """Base class for frame collections."""
 
     def __init__(self):
-        self.collection = []
+        self.frames: List[Frame] = []
 
-    def add_frame(self, frame):
-        self.collection.append(frame)
-
+    def add_frame(self, frame: Frame) -> None:
+        self.frames.append(frame)
 
 class SingleLabelFrames(FrameCollection):
-    def __init__(self):
-        super().__init__()
+    """Collection of frames sharing a primary label."""
 
-    def get_objects(self):
-        self.primary_label = self.collection[0].get_label()
-        primary_objs = self.collection[0].get_objects(self.primary_label)
+    def get_objects(self) -> ObjectCollection:
+        """Process frames and extract objects."""
+        primary_frame = self.frames[0]
+        primary_label = primary_frame.get_label()
+        primary_objects = primary_frame.get_objects(primary_label)
 
-        for frame in self.collection[1:]:
-            objs = frame.get_objects(frame_label=self.primary_label)
-            primary_objs.merge_secondary(objs)
+        for frame in self.frames[1:]:
+            secondary_objects = frame.get_objects(primary_label)
+            primary_objects.merge_secondary(secondary_objects)
 
-        self.objects = primary_objs
-        return self.objects
-
+        return primary_objects
 
 class ObjectsAlbum:
+    """Collection of object collections across multiple acquisitions."""
+
     def __init__(self):
-        self.objects_collection_group = OrderedDict()
-        self.detected_objects = []
-        self.count = 0
+        self.collection_groups: Dict[str, ObjectCollection] = OrderedDict()
+        self.detected_objects: List[DetectedObject] = []
+        self.count: int = 0
 
-    def add_object_collection(self, uid, objects_collection):
-        self.objects_collection_group[uid] = objects_collection
-        self.count += len(objects_collection.detected_objects)
-        self.detected_objects.extend(objects_collection.detected_objects)
+    def add_collection(self, uid: str, collection: ObjectCollection) -> None:
+        """Add object collection to album."""
+        self.collection_groups[uid] = collection
+        self.count += len(collection.detected_objects)
+        self.detected_objects.extend(collection.detected_objects)
 
-    def __getitem__(self, value):
-        return self.detected_objects[value]
+    def __getitem__(self, index: int) -> DetectedObject:
+        return self.detected_objects[index]
 
-    def get_data_from_uid(self, uid):
+    def get_data_from_uid(self, uid: str) -> np.ndarray:
+        """Retrieve raw data for given UID."""
         table = db[uid].table()
-        data = np.stack(table["image"].to_numpy())
-        return data
+        return np.stack(table["image"].to_numpy())
 
-    def view_raw(self, value):
-        uid = list(self.objects_collection_group.items())[value][0]
+    def view_raw(self, index: int) -> None:
+        """View raw data for collection at index."""
+        uid = list(self.collection_groups.keys())[index]
         img = self.get_data_from_uid(uid)
         view(img)
 
     def get_coords(self):
         coords = []
 
-        for uid, objects_collection in self.objects_group.items():
+        for uid, objects_collection in self.collection_groups.items():
             coords.extend(
                 [
                     detected_obj.vector["coords"]
