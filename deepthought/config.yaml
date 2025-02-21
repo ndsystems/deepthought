@@ -1,0 +1,44 @@
+system:
+  log_dir: "logs"
+  data_dir: "data"
+  max_memory_usage: 8192  # 8GB
+  debug_mode: false
+
+microscopes:
+  bright_star:
+    name: "bright_star"
+    ip_address: "10.10.1.35"
+    pixel_size: 6.5
+    max_exposure: 5000
+    objective_magnifications:
+      1: 10
+      2: 20
+      3: 40
+      4: 100
+
+  eva_green:
+    name: "eva_green"
+    ip_address: "10.10.1.57"
+    pixel_size: 6.5
+    max_exposure: 5000
+    objective_magnifications:
+      1: 10
+      2: 20
+      3: 40
+      4: 60
+
+channels:
+  DAPI:
+    exposure: 30
+    marker: "nuclear"
+    detector: "NuclearDetector"
+  
+  FITC:
+    exposure: 200
+    marker: "g-h2ax"
+    detect_with: "DAPI"
+    
+  TxRed:
+    exposure: 200
+    marker: "p-chk1"
+    detect_with: "DAPI" 

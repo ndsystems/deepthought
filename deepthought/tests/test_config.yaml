@@ -1,0 +1,15 @@
+system:
+  log_dir: "test_logs"
+  data_dir: "test_data"
+  max_memory_usage: 1024  # 1GB
+  debug_mode: true
+
+microscopes:
+  test_scope:
+    name: "test_scope"
+    ip_address: "127.0.0.1"
+    pixel_size: 6.5
+    max_exposure: 1000
+    objective_magnifications:
+      1: 10
+      2: 20 
