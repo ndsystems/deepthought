@@ -1,46 +1,24 @@
-Proprietary License
+MIT License
 
-Copyright (c) 2025 nDimensional Systems. All rights reserved.
+Copyright (c) 2025 nDimensional Systems
 
-TERMS AND CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. Viewing Rights
-   You may view, browse, and study the source code of this software and its documentation
-   for educational and reference purposes only.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-2. Usage Restrictions
-   This software and its source code may not be used, copied, modified, merged, published,
-   distributed, sublicensed, or sold without explicit written permission from nDimensional
-   Systems.
-
-3. No Implied Rights
-   No rights or licenses are granted except for the limited viewing rights expressly stated
-   in section 1 above. In particular, no right or license is granted to:
-   a) Use the software for any purpose
-   b) Modify or create derivative works
-   c) Distribute or redistribute any portion of the code
-   d) Use the code in commercial or non-commercial applications
-   e) Incorporate the code into other software or systems
-
-4. No Warranty
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
-   NDIMENSIONAL SYSTEMS MAKES NO WARRANTIES OR REPRESENTATIONS ABOUT THE SUITABILITY,
-   RELIABILITY, AVAILABILITY, TIMELINESS, SECURITY OR ACCURACY OF THE SOFTWARE.
-
-5. Limitation of Liability
-   IN NO EVENT SHALL NDIMENSIONAL SYSTEMS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE,
-   INABILITY TO USE, OR VIEWING OF THE SOFTWARE.
-
-6. Intellectual Property
-   All intellectual property rights in the software shall remain the property of
-   nDimensional Systems. Nothing in this license constitutes a transfer of any
-   intellectual property rights.
-
-7. Termination
-   This license is effective until terminated. Your rights under this license will
-   terminate automatically without notice if you fail to comply with any of its terms
-   and conditions.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 For licensing inquiries or permission requests, please contact:
 pskeshu@gmail.com

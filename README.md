@@ -191,6 +191,6 @@ All actions and perceptions are logged to Bluesky's database:
 
 ## License
 
-This project is proprietary software owned by nDimensional Systems. The source code is available for viewing and educational purposes only. Any use, modification, or distribution requires explicit written permission.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 For licensing inquiries, please contact: pskeshu@gmail.com
