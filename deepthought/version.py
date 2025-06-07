@@ -1,6 +1,6 @@
 """Version information."""
 
-__version_info__ = (2, 0, 0, 'alpha', 0)
+__version_info__ = (2, 0, 0, 'beta', 0)
 # Format: (major, minor, patch, release_type, alpha/beta_version)
 # release_type can be 'alpha', 'beta', 'rc' or 'final'
 
