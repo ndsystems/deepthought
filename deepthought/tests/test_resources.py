@@ -3,8 +3,8 @@
 import pytest
 import numpy as np
 from pathlib import Path
-from resources import ResourceManager
-from exceptions import ResourceError
+from ..infrastructure.resources import ResourceManager
+from ..exceptions import MicroscopyError as ResourceError
 
 @pytest.fixture
 def config():

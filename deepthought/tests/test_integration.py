@@ -3,10 +3,9 @@
 import pytest
 import numpy as np
 from pathlib import Path
-from microscope import Microscope
-from resources import ResourceManager
-from config import ConfigManager
-from exceptions import MicroscopeError
+from ..hardware.microscope import Microscope
+from ..infrastructure.resources import ResourceManager
+from ..exceptions import MicroscopyError
 
 @pytest.fixture
 def system_setup():

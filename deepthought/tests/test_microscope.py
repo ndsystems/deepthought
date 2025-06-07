@@ -3,8 +3,8 @@
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
-from microscope import Microscope
-from exceptions import HardwareError, ConfigurationError
+from ..hardware.microscope import Microscope
+from ..exceptions import MicroscopyError
 
 @pytest.fixture
 def mock_mmc():
