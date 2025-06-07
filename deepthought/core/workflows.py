@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Dict, List, Optional, Set, Tuple
 
-from .biology import BiologicalEntity, EntityType
-from .microscopy_loop import (
+from ..domain.biology import BiologicalEntity, EntityType
+from .loop import (
     MicroscopeState,
     Perception,
     StagePosition
 )
-from .microscopy_strategies import (
+from .strategies import (
     CompositeStrategy,
     FocusMapStrategy,
     MapSampleStrategy,
@@ -47,7 +47,7 @@ class CellTrackingExperiment:
         ).run(initial_state)
         
         # 2. Find cells of interest
-        from .microscopy_strategies import FindCellsStrategy
+        from .strategies import FindCellsStrategy
         cell_finding = FindCellsStrategy(
             cell_type=self.target_cell_type,
             min_count=self.min_cells
@@ -70,7 +70,7 @@ class CellTrackingExperiment:
             tracking
         ])
         
-        from .microscopy_loop import MicroscopyLoop
+        from .loop import MicroscopyLoop
         loop = MicroscopyLoop(strategy, initial_state)
         return await loop.run()
 
@@ -112,7 +112,7 @@ class TissueMappingExperiment:
             acquisition
         ])
         
-        from .microscopy_loop import MicroscopyLoop
+        from .loop import MicroscopyLoop
         loop = MicroscopyLoop(strategy, initial_state)
         return await loop.run()
     
@@ -176,7 +176,7 @@ class MultiModalExperiment:
             tracking
         ])
         
-        from .microscopy_loop import MicroscopyLoop
+        from .loop import MicroscopyLoop
         loop = MicroscopyLoop(strategy, initial_state)
         return await loop.run()
 
@@ -215,7 +215,7 @@ class AdaptiveImagingExperiment:
             )
         
         # Run adapted workflow
-        from .microscopy_loop import MicroscopyLoop
+        from .loop import MicroscopyLoop
         loop = MicroscopyLoop(strategy, initial_state)
         return await loop.run()
     

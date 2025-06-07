@@ -9,27 +9,27 @@ import numpy as np
 import napari
 from datetime import datetime, timedelta
 
-from microscope import ActionPerceptionMicroscope
-from devices import MMCoreInterface
+from ..hardware.microscope import ActionPerceptionMicroscope
+from ..hardware.devices import MMCoreInterface
 from bluesky.callbacks.best_effort import BestEffortCallback
 from bluesky import RunEngine
-from data import db
-from detection import NuclearDetector
-from channels import ChannelConfig
+from ..infrastructure.data import db
+from ..analysis.detection import NuclearDetector
+from ..hardware.channels import ChannelConfig
 
-from .microscopy_loop import (
+from ..core.loop import (
     MicroscopeAction,
     MicroscopeState,
     ObservationStrategy,
     Perception,
     StagePosition
 )
-from .microscopy_strategies import (
+from ..core.strategies import (
     CompositeStrategy,
     MapSampleStrategy,
     MultiChannelAcquisitionStrategy
 )
-from .microscopy_workflows import (
+from ..core.workflows import (
     CellTrackingExperiment,
     TissueMappingExperiment
 )

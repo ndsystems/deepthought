@@ -12,8 +12,8 @@ from enum import Enum, auto
 from typing import Dict, List, Optional, Protocol, Set, Tuple
 import numpy as np
 
-from .biology import BiologicalEntity, BiologicalSample, EntityType
-from .observation import EntityObservation, ObservationSet, TechnicalParameters
+from ..domain.biology import BiologicalEntity, BiologicalSample, EntityType
+from ..domain.observation import EntityObservation, ObservationSet, TechnicalParameters
 
 class ActionStatus(Enum):
     """Status of an action execution"""

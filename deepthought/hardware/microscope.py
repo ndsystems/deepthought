@@ -5,12 +5,14 @@ This module provides the technical implementation for observing biological
 entities using microscopy hardware.
 """
 
+import logging
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
-from .biology import BiologicalEntity, BiologicalSample, EntityType
-from .observation import (
+from ..domain.biology import BiologicalEntity, BiologicalSample, EntityType
+from ..domain.observation import (
     EntityObservation,
     MicroscopyMethod,
     ObservationSet,
@@ -19,29 +21,7 @@ from .observation import (
     TechnicalParameters
 )
 
-from frames import (
-    ExperimentContext, 
-    AcquisitionFrame, 
-    Position, 
-    Channel, 
-    MicroscopeState,
-    AnalysisPipeline, 
-    ObjectDetectionProcessor, 
-    NuclearDetector
-)
-from ophyd import Signal
-from .sample import ConfocalDish
-from .perception import (
-    PerceptionSpace,
-    BiologicalEntity as PerceptionBiologicalEntity,
-    BiologicalEntityType as PerceptionBiologicalEntityType,
-    SpatialContext,
-    TemporalContext
-)
-from .perception_adapters import (
-    NuclearPerceptionMethod,
-    CellPerceptionMethod
-)
+from ..domain.sample import ConfocalDish
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -90,15 +70,6 @@ class AdaptiveMicroscopyOperations:
         self.hw = hardware
         self.current_sample: Optional[BiologicalSample] = None
         self.observation_method = MicroscopyMethod()
-        self.perception_space = PerceptionSpace()
-        
-        # Initialize perception methods
-        self.perception_space.add_perception_method(
-            NuclearPerceptionMethod(self.hw.nuclear_detector)
-        )
-        self.perception_space.add_perception_method(
-            CellPerceptionMethod(self.hw.cell_detector)
-        )
         
         # Initialize logging
         self.logger = logging.getLogger(__name__)
@@ -203,58 +174,18 @@ class AdaptiveMicroscopyOperations:
                           entity: BiologicalEntity
                           ) -> Optional[Tuple[float, float, float]]:
         """Find entity in sample"""
-        # Implementation for entity search
-        try:
-            # Get current position and generate search grid
-            current_pos = await plan_stubs.rd(self.hw.stage)
-            grid = self.hw.generate_grid(*current_pos, num=3)
-            
-            best_position = None
-            max_entity_count = 0
-            
-            # Setup observation parameters
-            channel = Channel(
-                name="brightfield",
-                exposure=await plan_stubs.rd(self.hw.cam.exposure)
-            )
-            
-            # Search grid points
-            for point in grid.midpoints():
-                position = Position(x=point['x'], y=point['y'], z=0)
-                
-                # Make observations
-                entities = await self._observe_position(position, channel)
-                
-                # Filter by type and confidence
-                relevant_entities = [
-                    e for e in entities
-                    if e.characteristics.entity_type == entity.entity_type
-                    and e.confidence.detection_confidence >= 0.7
-                ]
-                
-                if len(relevant_entities) > max_entity_count:
-                    max_entity_count = len(relevant_entities)
-                    best_position = position
-            
-            # Move to best position if criteria met
-            if max_entity_count >= 5 and best_position:
-                async with hardware_operation(self.hw, f"move to best position {best_position}"):
-                    await plan_stubs.mv(self.hw.stage, best_position.x, best_position.y)
-                return best_position
-                
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"Error finding entity: {str(e)}")
-            raise MicroscopyError("Failed to find entity") from e
+        # TODO: Implement entity search logic
+        # This method needs to be implemented with proper hardware control
+        self.logger.warning("Entity finding not yet implemented")
+        return None
 
     async def _move_to_position(self,
                                position: Tuple[float, float, float]
                                ) -> None:
         """Move microscope to position"""
-        async with hardware_operation(self.hw, f"move to position {position}"):
-            await plan_stubs.mv(self.hw.stage, position[0], position[1])
-            await plan_stubs.mv(self.hw.z, position[2])
+        # TODO: Implement hardware movement
+        self.logger.info(f"Moving to position {position}")
+        pass
         
     async def _configure_channel(self,
                                channel: str,

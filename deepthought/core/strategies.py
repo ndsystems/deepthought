@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 import numpy as np
 
-from .biology import BiologicalEntity, EntityType
-from .microscopy_loop import (
+from ..domain.biology import BiologicalEntity, EntityType
+from .loop import (
     ActionContext,
     ActionResult,
     AcquireImage,
@@ -269,7 +269,7 @@ class TimeSeriesWorkflow:
         ])
         
         # Run microscopy loop
-        from .microscopy_loop import MicroscopyLoop
+        from .loop import MicroscopyLoop
         loop = MicroscopyLoop(strategy, initial_state)
         return await loop.run()
 
@@ -301,6 +301,6 @@ class SampleMappingWorkflow:
         strategy = CompositeStrategy([mapping, acquisition])
         
         # Run microscopy loop
-        from .microscopy_loop import MicroscopyLoop
+        from .loop import MicroscopyLoop
         loop = MicroscopyLoop(strategy, initial_state)
         return await loop.run()
