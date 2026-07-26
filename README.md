@@ -1,58 +1,165 @@
 # deepthought
 
-This is the client side application which can connect to
-[`hard-link`](https://github.com/ndsystems/hard-link) to get live-data from the
-microscope.
+A closed-loop microscope acquisition and analysis library. Images are segmented as
+they are acquired, and what the segmentation finds is available to the plan that is
+still running — so the experiment can respond to the sample instead of replaying a
+fixed list of coordinates.
 
-## How to install
+deepthought is the client half of a two-part system. The other half is
+[`hard-link`](https://github.com/ndsystems/hard-link), which puts the microscope on
+the network.
 
-1. You could optionally use a virtual environment.
+## Status
 
-```cmd
-$ python -m pip install virtualenv
-$ python -m virtualenv deepthought
-$ source deepthought/bin/activate
-$ python -m pip install -U pip
-``````
+**Paused, and preserved as a record.** This is research code written between 2021 and
+2023 for a thesis, against library versions of that era. It is not maintained and does
+not install cleanly today. It is public because the architecture is worth reading and
+because the results below came out of it.
 
-2. Install with:
-   ```cmd
-   $ python -m pip install -e .
-   ```
+If you want to run something like this on a microscope today, treat this repository as
+a design reference rather than a dependency.
 
-## How to run
+## What it was used for
 
-```cmd 
-$ python run.py
+Running on an ordinary motorised widefield microscope, with no operator present:
+
+- **22,000 cells** of immunofluorescence against γH2AX and phosphorylated Chk1
+  (11,000 control, 11,000 treated with neocarzinostatin), imaged and counted
+  automatically. Sample sizes at this scale normally require a high-content system.
+- **12,000 cells** per condition under 0.02% MMS, where the larger N resolved a rare
+  subpopulation — a shift in phosphorylated Chk1 — that was invisible at N=30.
+- **24-hour live imaging** of HeLa cells expressing PCNA-chromobody, every 20 minutes.
+  In an unsynchronised population, this caught PCNA repair foci being carried through
+  mitosis into G1 daughter cells — an event you would otherwise need chemical cell
+  cycle arrest to look for, and the arrest itself perturbs the response.
+
+The point of all three is the same: throughput bought resolution of the population,
+and the population is where the biology was.
+
+## Architecture
+
+Conventional microscope software is an open loop. The operator finds fields by eye,
+hands the software a list of coordinates, the software returns raw data, and analysis
+happens later somewhere else. If the analysis reveals drift, bad exposure, or too few
+cells, the experiment is already over.
+
+deepthought closes that loop by splitting the system across a network boundary and
+putting analysis inside the acquisition:
+
+```
+  microscope PC "bright_star"                 analysis PC (any OS)
+  ┌────────────────────────┐                  ┌──────────────────────────────┐
+  │ devices                │                  │ deepthought                  │
+  │   ↕                    │                  │                              │
+  │ Micro-Manager adapters │   RPyC / TCP     │  MMCoreInterface             │
+  │   ↕                    │ ←──────────────→ │    ├─ "bright_star"          │
+  │ MMCore (via pymmcore)  │   :18861         │    └─ "eva_green"            │
+  │   ↕                    │                  │         ↕                    │
+  │ hard-link RPyC server  │                  │  bluesky plans               │
+  └────────────────────────┘                  │         ↕                    │
+                                              │  RunEngine                   │
+  microscope PC "eva_green"                   │         ↓ documents          │
+  ┌────────────────────────┐   RPyC / TCP     │  Frame → Detector → Album    │
+  │ … the same stack …     │ ←──────────────→ │         ↓                    │
+  └────────────────────────┘   :18861         │  live view                   │
+                                              └──────────────────────────────┘
 ```
 
-## Troubleshooting
+**Device control is a network call.** MMCore is wrapped in an RPyC server, so the
+client can run on any OS and a crashing client cannot take the hardware down with it.
 
-1. If you have `llvm11`, you might get an error while installing `llvmlite`, which is required by `numba`. Go back to `llvm10`.
+**One client, many microscopes.** Because a scope is just an address, a single session
+holds connections to as many as you like. `MMCoreInterface` keys them by IP and by
+name, and a `Microscope` is built against whichever core you hand it:
 
-## How to access data
+```python
+scopes = MMCoreInterface()
+scopes.add("10.10.1.35", "bright_star")
+scopes.add("10.10.1.57", "eva_green")
 
-databroker manages access to data for us. To get started with the experimental data stored in deepthought/db_data/\*.msgpack,
+m = Microscope(mmc=scopes["bright_star"])
+```
 
-set-up a yml configuration file for a catalog, where databroker looks for it.
+This is not multiplexing one experiment across instruments — it is one place to write
+plans, drive several scopes, and collect their data through the same model. Adding an
+instrument is adding a line, not standing up a second software installation. It also
+means a plan developed against `SimMMC` (the simulated core in `hard-link`) moves to
+real hardware by changing which entry of the interface it is handed.
 
-1. Find out where databroker looks for it with `python3 -c "import databroker; print(databroker.catalog_search_path())"`
-2. make a copy of `./catalog.yml` and edit it to point to `db_data/*.msgpack` correctly, and move the file to one of the catalog search paths.
+**Plans are separate from device commands.** Devices are described in the ophyd style
+— a motor is anything you can `set` and `read`, a detector is anything you can
+`trigger` and `read` — and experiments are written as bluesky plans, executed by a
+RunEngine that handles sequencing, metadata, and the event stream. Camera exposure is
+modelled as a motor, so an exposure sweep is written exactly like a Z scan.
 
-to test if you have been succesfull,
+**The sample is a first-class object, not a coordinate list.** A confocal dish is a
+circle with a centre and a diameter; a scan grid intersected with that circle stays on
+the coverslip and off the plastic periphery where the optics degrade. Sample geometry
+belongs to the sample, not to the instrument.
 
-1. open terminal from the context of `deepthought/deepthought`,
-2. if this runs without error, you're good to go. `python3 -c "from data import db"`
+**Analysis is inside the loop.** Each acquired image becomes a `Frame`. A `Detector`
+(here, cellpose) segments it. Detected objects, their positions and intensities
+accumulate in an `Album` that is live-plotted while the run continues — so the running
+N is visible during acquisition, not after it.
 
-accessing data programmatically
+The full design rationale, with figures, is in [`manual.tex`](manual.tex) — a thesis
+chapter, and the real documentation for this repository.
+
+## Repository map
+
+| Module | Purpose |
+|---|---|
+| `devices.py` | ophyd-style Camera, Focus, XYStage, Channel, AutoFocus over MMCore; `MMCoreInterface` holds connections to several scopes |
+| `microscope.py` | `BaseMicroscope` (autoexposure, channel switching, grid generation) and `Microscope` (the scan plans) |
+| `run.py` | RunEngine setup, channel definitions, entry point |
+| `frames.py` | `Frame`, `ObjectsCollection`, `ObjectsAlbum` — the acquired-data model |
+| `detection.py` | `Detector` interface; cellpose nuclear segmentation |
+| `labels.py`, `process.py` | segmentation plumbing and skimage wrappers |
+| `compute.py` | circularity; fluorescence anisotropy from parallel/perpendicular channels |
+| `coords.py` | conversions between `x,y`, `r,c` and Cartesian conventions — documented, standalone, the most reusable file here |
+| `optimization.py` | DCT–Shannon focus metric and 1D fitting, by [@nvladimus](https://github.com/nvladimus) |
+| `transform.py` | affine registration via SimpleITK/elastix |
+| `comms.py` | RPyC client/server helpers |
+
+## Running it
+
+Not recommended, and not currently possible without work. For the record, the intended
+shape was: start `hard-link` on the microscope PC, point `MMCoreInterface` at its
+address, define channels, build a plan, hand it to the RunEngine — see `run.py`.
+
+Blockers if you try:
+
+- There is no `deepthought/__init__.py`, so `find_packages()` finds nothing and
+  `pip install -e .` installs no importable code. Imports are flat (`from devices
+  import Camera`), so modules only resolve with the working directory set to
+  `deepthought/deepthought`.
+- Dependencies are pinned to 2020 releases (`cellpose==0.6`, `napari==0.4.3`,
+  `bluesky==1.6.7`, `ophyd==1.6.0`, `databroker==1.2.0`) that will not install on a
+  current Python. `scanspec`, `SimpleITK`, `pandas`, `scipy`, `forallpeople` and
+  `matplotlib` are imported but declared nowhere.
+- `data.py` opens a databroker catalog at import time, so importing `frames` fails
+  unless a catalog is already configured.
+- Hardware specifics are hardcoded: lab IP addresses in `run.py`, an Andor Zyla 6.5 µm
+  pixel, an objective-state→magnification map, a 13 mm dish.
+
+## Accessing the example data
+
+Two runs are included as msgpack under `deepthought/db_data/`. databroker manages
+access:
+
+1. Find where databroker looks for catalogs:
+   `python -c "import databroker; print(databroker.catalog_search_path())"`
+2. Copy `catalog.yml`, edit it to point at `db_data/*.msgpack`, and move it to one of
+   those paths.
 
 ```python
 from data import db
 
-# returns the databroker.Header object which can give you the data in many forms
-header = db[-1]
-
-# access data as pandas.DataFrame
-df = header.table()
-
+header = db[-1]      # a databroker.Header
+df = header.table()  # as a pandas.DataFrame
 ```
+
+## Citing
+
+If this architecture is useful to you, cite the thesis chapter in `manual.tex`. The
+code is MIT licensed — see [LICENSE](LICENSE).
