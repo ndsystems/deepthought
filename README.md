@@ -11,13 +11,13 @@ the network.
 
 ## Status
 
-**Paused, and preserved as a record.** This is research code written between 2021 and
-2023 for a thesis, against library versions of that era. It is not maintained and does
-not install cleanly today. It is public because the architecture is worth reading and
-because the results below came out of it.
+**Complete, and preserved as a record.** This is research code written between 2021
+and 2023 for a thesis, against the library versions of that era. It is archived at the
+state that produced the results below, and is not maintained.
 
-If you want to run something like this on a microscope today, treat this repository as
-a design reference rather than a dependency.
+The architecture is the part worth reading. It is described here and analysed in full
+in the accompanying [preprint](https://doi.org/10.1101/2025.02.25.639997). Current work
+on the same problem continues in [gently](https://github.com/gently-project/gently).
 
 ## What it was used for
 
@@ -123,24 +123,11 @@ chapter, and the real documentation for this repository.
 
 ## Running it
 
-Not recommended, and not currently possible without work. For the record, the intended
-shape was: start `hard-link` on the microscope PC, point `MMCoreInterface` at its
-address, define channels, build a plan, hand it to the RunEngine — see `run.py`.
-
-Blockers if you try:
-
-- There is no `deepthought/__init__.py`, so `find_packages()` finds nothing and
-  `pip install -e .` installs no importable code. Imports are flat (`from devices
-  import Camera`), so modules only resolve with the working directory set to
-  `deepthought/deepthought`.
-- Dependencies are pinned to 2020 releases (`cellpose==0.6`, `napari==0.4.3`,
-  `bluesky==1.6.7`, `ophyd==1.6.0`, `databroker==1.2.0`) that will not install on a
-  current Python. `scanspec`, `SimpleITK`, `pandas`, `scipy`, `forallpeople` and
-  `matplotlib` are imported but declared nowhere.
-- `data.py` opens a databroker catalog at import time, so importing `frames` fails
-  unless a catalog is already configured.
-- Hardware specifics are hardcoded: lab IP addresses in `run.py`, an Andor Zyla 6.5 µm
-  pixel, an objective-state→magnification map, a 13 mm dish.
+The intended shape was: start `hard-link` on the microscope PC, point
+`MMCoreInterface` at its address, define channels, build a plan, and hand it to the
+RunEngine — see `run.py`. Running it today means pinning the 2020-era dependencies it
+was written against, and the hardware specifics in `run.py` are those of the
+instrument it ran on.
 
 ## Accessing the example data
 
